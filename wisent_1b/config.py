@@ -125,3 +125,85 @@ def wisent_tiny_config() -> WisentConfig:
         named_concepts=["truthfulness", "refusal", "code_mode", "uncertainty"],
         dropout=0.0,
     )
+
+
+@dataclass
+class WisentConfigV2(WisentConfig):
+    """Advanced configuration for WisentRNMv2.
+
+    Extends WisentConfig with subspace, probabilistic, and non-linear concept
+    options. Geometry is baked into the architecture rather than applied post-hoc.
+    """
+
+    # Subspace concepts: each concept is a rank-r subspace, not a single vector.
+    subspace_rank: int = 4
+    normalize_subspace_basis: bool = True
+
+    # Probabilistic concept state: maintain mean + std in subspace coordinates.
+    probabilistic_concepts: bool = True
+    kl_weight: float = 1e-4
+
+    # Non-linear concept dynamics via MLP cells.
+    nonlinear_concepts: bool = True
+    concept_mlp_hidden: Optional[int] = None
+
+    # Input-dependent concept router.
+    use_concept_router: bool = True
+
+    # Manifold decoder: maps subspace coordinates through a small MLP.
+    use_manifold_decoder: bool = True
+
+    # Geometric control: support magnitude, direction, uncertainty, select.
+    control_modes: List[str] = field(
+        default_factory=lambda: ["magnitude", "direction", "uncertainty", "select"]
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.subspace_rank > self.d_concept:
+            raise ValueError(
+                f"subspace_rank ({self.subspace_rank}) cannot exceed d_concept ({self.d_concept})"
+            )
+        if self.concept_mlp_hidden is None:
+            self.concept_mlp_hidden = 4 * self.d_concept
+
+
+def wisent_1b_v2_config() -> WisentConfigV2:
+    """Advanced 1B-scale configuration with geometric concepts."""
+    return WisentConfigV2(
+        vocab_size=32000,
+        max_position_embeddings=4096,
+        d_model=2048,
+        n_layers=22,
+        n_heads=16,
+        n_concepts=64,
+        d_concept=256,
+        n_named_concepts=8,
+        subspace_rank=8,
+        probabilistic_concepts=True,
+        nonlinear_concepts=True,
+        use_concept_router=True,
+        use_manifold_decoder=True,
+        dropout=0.0,
+    )
+
+
+def wisent_tiny_v2_config() -> WisentConfigV2:
+    """Tiny advanced config for fast experiments."""
+    return WisentConfigV2(
+        vocab_size=256,
+        max_position_embeddings=128,
+        d_model=128,
+        n_layers=4,
+        n_heads=4,
+        n_concepts=8,
+        d_concept=64,
+        n_named_concepts=4,
+        named_concepts=["truthfulness", "refusal", "code_mode", "uncertainty"],
+        subspace_rank=4,
+        probabilistic_concepts=True,
+        nonlinear_concepts=True,
+        use_concept_router=True,
+        use_manifold_decoder=True,
+        dropout=0.0,
+    )

@@ -1,7 +1,7 @@
 """Causal language modeling training for Wisent-1B."""
 from __future__ import annotations
 
-from typing import Iterable, Iterator, List
+from typing import Dict, Iterable, Iterator, List, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from .model import WisentRNM
+from .model_v2 import WisentRNMv2
 
 
 class TokenDataset(Dataset):
@@ -111,6 +112,93 @@ def train(
 
         if log_every > 0 and (step + 1) % log_every == 0:
             print(f"Step {step + 1}/{num_steps} | loss: {loss:.4f}")
+
+        if save_every is not None and save_fn is not None and (step + 1) % save_every == 0:
+            save_fn(step + 1)
+
+    return losses
+
+
+def compute_v2_loss(
+    model: WisentRNMv2,
+    batch: torch.Tensor,
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+    """Compute v2 training loss = LM loss + KL regularization.
+
+    Returns:
+        total loss, dict of component losses.
+    """
+    outputs = model(batch)
+    lm_loss = compute_lm_loss(outputs["logits"], batch)
+    kl_loss = outputs.get("kl_loss", torch.tensor(0.0, device=batch.device))
+    total_loss = lm_loss + model.config.kl_weight * kl_loss
+    return total_loss, {
+        "lm_loss": lm_loss.item(),
+        "kl_loss": kl_loss.item(),
+        "total_loss": total_loss.item(),
+    }
+
+
+def train_step_v2(
+    model: WisentRNMv2,
+    batch: torch.Tensor,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+) -> Dict[str, float]:
+    """Single v2 training step. Returns loss components."""
+    model.train()
+    batch = batch.to(device)
+    optimizer.zero_grad()
+    loss, metrics = compute_v2_loss(model, batch)
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optimizer.step()
+    return metrics
+
+
+def train_v2(
+    model: WisentRNMv2,
+    dataset: Iterable[torch.Tensor],
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    num_steps: int,
+    log_every: int = 10,
+    save_every: int | None = None,
+    save_fn=None,
+) -> List[Dict[str, float]]:
+    """Train a WisentRNMv2 model on a token dataset.
+
+    Args:
+        model: the v2 model to train.
+        dataset: iterator yielding token-id batches.
+        optimizer: optimizer.
+        device: device.
+        num_steps: total training steps.
+        log_every: how often to print loss.
+        save_every: how often to call save_fn(step).
+        save_fn: optional callable(step) invoked for checkpointing.
+
+    Returns:
+        list of loss-component dicts per step.
+    """
+    model.to(device)
+    losses = []
+    iterator = iter(dataset)
+
+    pbar = tqdm(range(num_steps), desc="Training v2")
+    for step in pbar:
+        try:
+            batch = next(iterator)
+        except StopIteration:
+            break
+
+        metrics = train_step_v2(model, batch, optimizer, device)
+        losses.append(metrics)
+        pbar.set_postfix({k: f"{v:.4f}" for k, v in metrics.items()})
+
+        if log_every > 0 and (step + 1) % log_every == 0:
+            msg = " | ".join(f"{k}: {v:.4f}" for k, v in metrics.items())
+            print(f"Step {step + 1}/{num_steps} | {msg}")
 
         if save_every is not None and save_fn is not None and (step + 1) % save_every == 0:
             save_fn(step + 1)

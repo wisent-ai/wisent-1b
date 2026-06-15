@@ -7,11 +7,13 @@ A reference implementation of **Wisent-1B**, a Representation-Native Language Mo
 ## What's inside
 
 - `wisent_1b/model.py` — `WisentRNM` and `WisentLayer` implementing the dual-stream architecture.
-- `wisent_1b/config.py` — `WisentConfig`, plus `wisent_1b_config()` and `wisent_tiny_config()`.
-- `wisent_1b/generate.py` — controlled generation with named concept controls and concept-trace output.
-- `wisent_1b/train.py` — causal language-modeling training utilities.
+- `wisent_1b/model_v2.py` — `WisentRNMv2`, an advanced geometry-native version (subspaces, probabilistic concepts, non-linear cells, manifold decoder).
+- `wisent_1b/config.py` — `WisentConfig` / `WisentConfigV2`, plus factory helpers.
+- `wisent_1b/generate.py` — controlled generation for v1 (`generate`) and v2 (`generate_v2`).
+- `wisent_1b/train.py` — causal language-modeling training utilities for v1 and v2.
 - `wisent_1b/control.py` — lightweight helpers for concept alignment and control fine-tuning.
-- `scripts/demo_toy.py` — end-to-end demo showing concept control on synthetic data.
+- `scripts/demo_toy.py` — end-to-end demo of v1 concept control on synthetic data.
+- `scripts/demo_geometric.py` — end-to-end demo of v2 geometric concept control.
 - `scripts/train.py` / `scripts/generate.py` — CLI entry points.
 - `tests/` — unit tests.
 
@@ -69,6 +71,52 @@ Controls are applied in two ways:
 2. **Concept-stream scaling** — named concept embeddings are scaled by the scalar control magnitudes at the input to the concept stream.
 
 This dual-path design keeps training stable while preserving the representation-native concept stream.
+
+## WisentRNMv2: geometric concepts (advanced)
+
+`WisentRNMv2` bakes geometry into the architecture itself, rather than applying scalar steering after training:
+
+- **Subspace concepts** — each concept is a rank-`r` subspace (`basis` + `centroid`) instead of a single vector.
+- **Probabilistic concept state** — each concept carries a Gaussian `N(mean, std²)` in subspace coordinates, regularized by a KL term during training.
+- **Non-linear concept cells** — MLP-based read/update/write dynamics replace linear cross-attention.
+- **Input-dependent router** — each token is assigned a relevance distribution over concepts.
+- **Manifold decoder** — subspace coordinates are decoded through a non-linear MLP before being written back to tokens.
+- **Geometric controls** — four control modes:
+  - `magnitude`: scale concept means.
+  - `direction`: add a vector in subspace coordinates.
+  - `uncertainty`: increase/decrease concept std.
+  - `select`: soft-mask concept activation.
+
+Run the geometric demo:
+
+```bash
+python scripts/demo_geometric.py
+```
+
+### Python API (v2)
+
+```python
+from wisent_1b import WisentRNMv2, WisentTokenizer, generate_v2, wisent_tiny_v2_config
+
+config = wisent_tiny_v2_config()
+model = WisentRNMv2(config)
+tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
+
+out = generate_v2(
+    model,
+    tokenizer,
+    prompt="The sky is",
+    controls={
+        "magnitude": {"truthfulness": 2.0},
+        "direction": {"truthfulness": [1.0, -0.5, 0.0, 0.0]},
+    },
+    max_new_tokens=20,
+    return_concept_trace=True,
+)
+
+print(out.text)
+print(out.concept_trace["truthfulness"])  # per-layer subspace mean
+```
 
 ## Training
 

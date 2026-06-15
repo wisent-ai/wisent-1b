@@ -6,8 +6,9 @@ from typing import Dict
 
 import torch
 
-from .config import WisentConfig
+from .config import WisentConfig, WisentConfigV2
 from .model import WisentRNM
+from .model_v2 import WisentRNMv2
 
 
 def get_device(preferred: str | None = None) -> torch.device:
@@ -22,7 +23,7 @@ def get_device(preferred: str | None = None) -> torch.device:
 
 
 def save_checkpoint(
-    model: WisentRNM,
+    model,
     optimizer: torch.optim.Optimizer | None,
     step: int,
     output_dir: str,
@@ -44,11 +45,16 @@ def save_checkpoint(
     return path
 
 
-def load_checkpoint(path: str, device: torch.device | str = "cpu") -> WisentRNM:
-    """Load a model from a checkpoint."""
+def load_checkpoint(path: str, device: torch.device | str = "cpu"):
+    """Load a model from a checkpoint (auto-detects v1/v2)."""
     device = torch.device(device)
     state = torch.load(path, map_location=device, weights_only=False)
-    config = WisentConfig.from_dict(state["config"])
-    model = WisentRNM(config).to(device)
+    config_data = state["config"]
+    if config_data.get("subspace_rank") is not None:
+        config = WisentConfigV2.from_dict(config_data)
+        model = WisentRNMv2(config).to(device)
+    else:
+        config = WisentConfig.from_dict(config_data)
+        model = WisentRNM(config).to(device)
     model.load_state_dict(state["model_state_dict"])
     return model

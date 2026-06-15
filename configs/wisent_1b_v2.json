@@ -1,0 +1,41 @@
+{
+  "vocab_size": 32000,
+  "max_position_embeddings": 4096,
+  "d_model": 2048,
+  "n_layers": 22,
+  "n_heads": 16,
+  "d_head": null,
+  "intermediate_size": null,
+  "dropout": 0.0,
+  "n_concepts": 64,
+  "d_concept": 256,
+  "n_named_concepts": 8,
+  "named_concepts": [
+    "truthfulness",
+    "uncertainty",
+    "refusal",
+    "toxicity",
+    "instruction_following",
+    "code_mode",
+    "medical_risk",
+    "helpfulness"
+  ],
+  "concept_dropout": 0.0,
+  "layer_norm_eps": 1e-05,
+  "initializer_range": 0.02,
+  "tie_word_embeddings": false,
+  "subspace_rank": 16,
+  "normalize_subspace_basis": true,
+  "probabilistic_concepts": true,
+  "kl_weight": 1e-05,
+  "nonlinear_concepts": true,
+  "concept_mlp_hidden": 1024,
+  "use_concept_router": true,
+  "use_manifold_decoder": true,
+  "control_modes": [
+    "magnitude",
+    "direction",
+    "uncertainty",
+    "select"
+  ]
+}
