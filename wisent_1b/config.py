@@ -158,6 +158,22 @@ class WisentConfigV2(WisentConfig):
         default_factory=lambda: ["magnitude", "direction", "uncertainty", "select"]
     )
 
+    # Concept alignment: train concept states to be predictable from labels.
+    use_concept_alignment: bool = True
+    alignment_weight: float = 1.0
+
+    # TITAN-style steering manifold: multiple directions per named concept.
+    use_titan_manifold: bool = True
+    n_titan_directions: int = 4
+
+    # Geometry-aware regularization: keep concepts on their subspace manifold.
+    use_geometry_regularization: bool = True
+    geometry_weight: float = 1e-3
+
+    # Language-invariant concepts: align concept states across languages.
+    use_language_invariant_concepts: bool = False
+    language_invariant_weight: float = 1.0
+
     def __post_init__(self):
         super().__post_init__()
         if self.subspace_rank > self.d_concept:

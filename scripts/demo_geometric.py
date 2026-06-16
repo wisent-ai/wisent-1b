@@ -44,7 +44,7 @@ def build_controlled_dataset(tokenizer, n_examples: int = 400):
     return sequences, controls
 
 
-def collate_with_controls(batch, pad_token_id: int, n_named: int, concept_names: list, subspace_rank: int):
+def collate_with_controls(batch, pad_token_id: int, n_named: int, concept_names: list):
     """Collate token sequences and control vectors for v2."""
     tokens, controls = zip(*batch)
     max_len = max(len(t) for t in tokens)
@@ -76,7 +76,12 @@ def controlled_train_step_v2(model, batch_tokens, batch_controls, optimizer, dev
         ignore_index=0,
     )
     kl_loss = outputs.get("kl_loss", torch.tensor(0.0, device=device))
-    loss = lm_loss + model.config.kl_weight * kl_loss
+    geometry_loss = outputs.get("geometry_loss", torch.tensor(0.0, device=device))
+    loss = (
+        lm_loss
+        + model.config.kl_weight * kl_loss
+        + model.config.geometry_weight * geometry_loss
+    )
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     optimizer.step()
@@ -84,6 +89,7 @@ def controlled_train_step_v2(model, batch_tokens, batch_controls, optimizer, dev
         "total_loss": loss.item(),
         "lm_loss": lm_loss.item(),
         "kl_loss": kl_loss.item(),
+        "geometry_loss": geometry_loss.item(),
     }
 
 
@@ -92,6 +98,11 @@ def main():
     print(f"Demo running on {device}")
 
     config = wisent_tiny_v2_config()
+    config.use_concept_alignment = False
+    config.use_geometry_regularization = True
+    config.geometry_weight = 1e-4
+    config.use_titan_manifold = True
+    config.kl_weight = 1e-3
     tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
 
     sequences, controls = build_controlled_dataset(tokenizer, n_examples=400)
@@ -105,7 +116,6 @@ def main():
             pad_token_id=tokenizer.pad_token_id,
             n_named=config.n_named_concepts,
             concept_names=config.named_concepts,
-            subspace_rank=config.subspace_rank,
         ),
     )
 
@@ -115,7 +125,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)
     print("\nTraining tiny geometric model with truthfulness controls...")
 
-    num_steps = 200
+    num_steps = 300
     iterator = iter(dataloader)
     losses = []
     for step in range(num_steps):
@@ -127,10 +137,14 @@ def main():
 
         metrics = controlled_train_step_v2(model, batch_tokens, batch_controls, optimizer, device)
         losses.append(metrics)
-        if (step + 1) % 50 == 0:
-            avg_total = sum(m["total_loss"] for m in losses[-50:]) / len(losses[-50:])
-            avg_kl = sum(m["kl_loss"] for m in losses[-50:]) / len(losses[-50:])
-            print(f"Step {step + 1}/{num_steps} | avg total loss: {avg_total:.4f} | avg KL: {avg_kl:.4f}")
+        if (step + 1) % 75 == 0:
+            avg_total = sum(m["total_loss"] for m in losses[-75:]) / len(losses[-75:])
+            avg_kl = sum(m["kl_loss"] for m in losses[-75:]) / len(losses[-75:])
+            avg_geo = sum(m["geometry_loss"] for m in losses[-75:]) / len(losses[-75:])
+            print(
+                f"Step {step + 1}/{num_steps} | "
+                f"avg total: {avg_total:.4f} | avg KL: {avg_kl:.4f} | avg geometry: {avg_geo:.4f}"
+            )
 
     prompt = "the sky is "
     print("\n--- Greedy generation (no controls) ---")

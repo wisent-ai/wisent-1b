@@ -234,6 +234,56 @@ class NonlinearConceptCell(nn.Module):
         return linear_part + centroid.unsqueeze(0) + decoded
 
 
+class SteeringManifold(nn.Module):
+    """TITAN-style learned steering manifold baked into the concept stream.
+
+    Each named concept owns a set of directions in subspace coordinates. An
+    input-dependent intensity network combines those directions per layer,
+    adding a context-specific shift to the concept state.
+    """
+
+    def __init__(self, config: WisentConfigV2):
+        super().__init__()
+        self.config = config
+        self.n_named = config.n_named_concepts
+        self.n_directions = config.n_titan_directions
+        self.rank = config.subspace_rank
+
+        self.directions = nn.Parameter(
+            torch.randn(config.n_named_concepts, config.n_titan_directions, config.subspace_rank)
+            * config.initializer_range
+        )
+        h = max(config.concept_mlp_hidden // 2, 64)
+        self.intensity_mlp = nn.Sequential(
+            nn.Linear(config.d_model, h),
+            nn.GELU(),
+            nn.Dropout(config.dropout),
+            nn.Linear(h, config.n_named_concepts * config.n_titan_directions),
+        )
+
+    def forward(self, concept_coords: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
+        """Add input-dependent manifold shift to named concept coordinates.
+
+        Args:
+            concept_coords: (B, K, rank)
+            tokens: (B, T, d_model)
+
+        Returns:
+            updated concept_coords: (B, K, rank)
+        """
+        B = tokens.size(0)
+        pooled = tokens.mean(dim=1)  # (B, d_model)
+        intensity = self.intensity_mlp(pooled).view(
+            B, self.n_named, self.n_directions
+        )
+        intensity = F.softmax(intensity, dim=-1)
+        # Weighted combination of directions for named concepts.
+        delta = torch.einsum("bnd,ndr->bnr", intensity, self.directions)
+        concept_coords = concept_coords.clone()
+        concept_coords[:, : self.n_named] = concept_coords[:, : self.n_named] + delta
+        return concept_coords
+
+
 class GeometricControl(nn.Module):
     """Maps user controls to subspace-coordinate concept modifications."""
 
@@ -284,6 +334,31 @@ class GeometricControl(nn.Module):
         return mean, log_std
 
 
+class ConceptAlignmentHead(nn.Module):
+    """Predict named-concept control magnitudes from concept embeddings.
+
+    This bakes the Wisent-1B concept-alignment idea into the model: the concept
+    stream should contain enough information to reconstruct the control labels
+    that were injected during training.
+    """
+
+    def __init__(self, d_concept: int, n_named_concepts: int, dropout: float = 0.0):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(d_concept),
+            nn.Linear(d_concept, d_concept),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_concept, n_named_concepts),
+        )
+
+    def forward(self, concept_embedding: torch.Tensor) -> torch.Tensor:
+        """Args: concept_embedding (B, K, d_concept) -> predicted_controls (B, n_named)."""
+        # Aggregate over concepts and predict control magnitudes.
+        pooled = concept_embedding.mean(dim=1)  # (B, d_concept)
+        return self.net(pooled)
+
+
 class WisentRNMv2(nn.Module):
     """Wisent Representation-Native Model v2 with geometric concepts."""
 
@@ -319,6 +394,13 @@ class WisentRNMv2(nn.Module):
             [NonlinearConceptCell(config) for _ in range(config.n_layers)]
         )
 
+        if config.use_titan_manifold:
+            self.steering_manifolds = nn.ModuleList(
+                [SteeringManifold(config) for _ in range(config.n_layers)]
+            )
+        else:
+            self.steering_manifolds = None
+
         # Token stream layers.
         self.token_ln1s = nn.ModuleList([
             nn.LayerNorm(config.d_model, eps=config.layer_norm_eps) for _ in range(config.n_layers)
@@ -347,6 +429,13 @@ class WisentRNMv2(nn.Module):
         )
 
         self.geometric_control = GeometricControl(config)
+
+        if config.use_concept_alignment:
+            self.concept_alignment_head = ConceptAlignmentHead(
+                config.d_concept, config.n_named_concepts, config.dropout
+            )
+        else:
+            self.concept_alignment_head = None
 
         self.token_ln = nn.LayerNorm(config.d_model, eps=config.layer_norm_eps)
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
@@ -403,6 +492,8 @@ class WisentRNMv2(nn.Module):
         input_ids: torch.Tensor,
         controls: Optional[Dict[str, torch.Tensor]] = None,
         return_concept_trace: bool = False,
+        return_alignment_pred: bool = False,
+        return_concept_embedding: bool = False,
         deterministic: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """Forward pass.
@@ -411,10 +502,14 @@ class WisentRNMv2(nn.Module):
             input_ids: (B, T)
             controls: dict of control tensors per mode.
             return_concept_trace: if True, collect concept states per layer.
+            return_alignment_pred: if True, return concept-alignment predictions.
+            return_concept_embedding: if True, return final concept embeddings.
             deterministic: if True, do not sample concept state.
 
         Returns:
-            dict with "logits", optional "concept_trace", and optional "kl_loss".
+            dict with "logits", optional "concept_trace", optional "kl_loss",
+            optional "geometry_loss", optional "predicted_controls",
+            and optional "concept_embedding".
         """
         B, T = input_ids.shape
         device = input_ids.device
@@ -439,6 +534,7 @@ class WisentRNMv2(nn.Module):
 
         concept_trace = [] if return_concept_trace else None
         kl_loss = 0.0
+        geometry_loss = 0.0
 
         basis = self.concept_bank.get_basis()
         centroid = self.concept_bank.centroid
@@ -452,6 +548,10 @@ class WisentRNMv2(nn.Module):
                 self.token_ln1s[layer_idx](tokens),
                 self.token_ln1s[layer_idx](tokens),
             )
+
+            # 1b. TITAN-style input-dependent steering manifold.
+            if self.steering_manifolds is not None:
+                concept_mean = self.steering_manifolds[layer_idx](concept_mean, tokens)
 
             # 2. Build probabilistic concept state and decode to d_concept.
             concept_state = ProbabilisticConceptState(concept_mean, concept_log_std)
@@ -473,6 +573,11 @@ class WisentRNMv2(nn.Module):
             # Subtract centroid and project.
             centered = concept_emb - centroid.unsqueeze(0)
             concept_mean = self.concept_bank.project_to_subspace(centered, basis)
+            if self.config.use_geometry_regularization:
+                # Biprojection-style regularization: the updated concept embedding
+                # should stay close to the subspace manifold it was projected onto.
+                reconstructed = self.concept_bank.project_from_subspace(concept_mean, basis)
+                geometry_loss = geometry_loss + F.mse_loss(concept_emb, reconstructed)
             if self.config.probabilistic_concepts:
                 # Slowly update std; keep it as a learned per-concept parameter for now.
                 concept_log_std = concept_log_std
@@ -505,6 +610,12 @@ class WisentRNMv2(nn.Module):
             output["concept_trace"] = concept_trace
         if self.config.probabilistic_concepts:
             output["kl_loss"] = kl_loss / (B * self.config.n_layers)
+        if self.config.use_geometry_regularization:
+            output["geometry_loss"] = geometry_loss / self.config.n_layers
+        if return_alignment_pred and self.concept_alignment_head is not None:
+            output["predicted_controls"] = self.concept_alignment_head(concept_emb)
+        if return_concept_embedding:
+            output["concept_embedding"] = concept_emb
         return output
 
     def count_parameters(self) -> int:

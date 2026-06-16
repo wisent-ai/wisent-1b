@@ -113,3 +113,34 @@ def test_named_concept_labels():
     config = wisent_tiny_v2_config()
     model = WisentRNMv2(config)
     assert model.named_concept_labels == config.named_concepts
+
+
+def test_titan_manifold_changes_named_concepts():
+    config = wisent_tiny_v2_config()
+    config.use_titan_manifold = True
+    model = WisentRNMv2(config)
+    input_ids = torch.randint(0, config.vocab_size, (1, 8))
+    model.eval()
+    with torch.no_grad():
+        out_with = model(input_ids, deterministic=True)["logits"]
+
+    config.use_titan_manifold = False
+    model_no = WisentRNMv2(config)
+    # Copy token-stream weights so only manifold differs.
+    model_no.load_state_dict(model.state_dict(), strict=False)
+    model_no.eval()
+    with torch.no_grad():
+        out_without = model_no(input_ids, deterministic=True)["logits"]
+
+    assert not torch.allclose(out_with, out_without, atol=1e-6)
+
+
+def test_geometry_loss_returned():
+    config = wisent_tiny_v2_config()
+    config.use_geometry_regularization = True
+    model = WisentRNMv2(config)
+    input_ids = torch.randint(0, config.vocab_size, (2, 8))
+    outputs = model(input_ids)
+    assert "geometry_loss" in outputs
+    assert outputs["geometry_loss"].dim() == 0
+    assert outputs["geometry_loss"].item() >= 0

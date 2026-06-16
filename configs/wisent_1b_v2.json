@@ -37,5 +37,13 @@
     "direction",
     "uncertainty",
     "select"
-  ]
+  ],
+  "use_concept_alignment": true,
+  "alignment_weight": 1.0,
+  "use_titan_manifold": true,
+  "n_titan_directions": 4,
+  "use_geometry_regularization": true,
+  "geometry_weight": 0.001,
+  "use_language_invariant_concepts": false,
+  "language_invariant_weight": 1.0
 }

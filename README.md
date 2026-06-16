@@ -81,6 +81,11 @@ This dual-path design keeps training stable while preserving the representation-
 - **Non-linear concept cells** — MLP-based read/update/write dynamics replace linear cross-attention.
 - **Input-dependent router** — each token is assigned a relevance distribution over concepts.
 - **Manifold decoder** — subspace coordinates are decoded through a non-linear MLP before being written back to tokens.
+- **TITAN-style steering manifold** — each named concept owns multiple learned directions in subspace coordinates; an input-dependent intensity network combines them per layer.
+- **Geometry-aware regularization** — biprojection-style loss keeps updated concept embeddings on their subspace manifold.
+- **Concept alignment head** — a small head predicts injected control magnitudes from concept states, trained with contrastive supervision.
+- **Language-invariant concept objective** — optional loss that aligns concept embeddings of parallel sentences across languages.
+- **Control perturbation training** — random control magnitudes are injected during LM training so the model learns a smooth control surface.
 - **Geometric controls** — four control modes:
   - `magnitude`: scale concept means.
   - `direction`: add a vector in subspace coordinates.
@@ -141,6 +146,31 @@ python scripts/generate.py \
   --controls "truthfulness=1.5,refusal=-0.5" \
   --max_new_tokens 100 \
   --trace
+```
+
+### v2 training APIs
+
+```python
+from wisent_1b import WisentRNMv2, wisent_tiny_v2_config
+from wisent_1b.train import train_v2, train_v2_aligned, train_v2_multilingual
+
+config = wisent_tiny_v2_config()
+config.use_concept_alignment = True
+config.use_titan_manifold = True
+config.use_geometry_regularization = True
+model = WisentRNMv2(config)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+
+# LM pretraining with random control perturbations.
+train_v2(model, token_batches, optimizer, device, num_steps=1000,
+         perturb_controls=True, perturbation_scale=1.0)
+
+# Concept-alignment training with (tokens, control_magnitudes) batches.
+train_v2_aligned(model, aligned_batches, optimizer, device, num_steps=1000)
+
+# Multilingual concept-alignment with parallel sentences.
+config.use_language_invariant_concepts = True
+train_v2_multilingual(model, parallel_batches, optimizer, device, num_steps=1000)
 ```
 
 ### Python API
