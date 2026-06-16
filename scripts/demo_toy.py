@@ -1,4 +1,4 @@
-"""Small end-to-end demo of Rey-1B on synthetic controlled data.
+"""Small end-to-end demo of Rej-1B on synthetic controlled data.
 
 This demo shows the key architectural claim: by injecting concept controls
 during training, the model learns to map a named concept to a behavior, and
@@ -10,11 +10,11 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
-from rey_1b.config import rey_tiny_config
-from rey_1b.generate import generate
-from rey_1b.model import ReyRNM
-from rey_1b.tokenizer import ReyTokenizer
-from rey_1b.utils import get_device
+from rej_1b.config import rej_tiny_config
+from rej_1b.generate import generate
+from rej_1b.model import RejRNM
+from rej_1b.tokenizer import RejTokenizer
+from rej_1b.utils import get_device
 
 
 def build_controlled_dataset(tokenizer, n_examples: int = 400):
@@ -92,14 +92,14 @@ def main():
     print(f"Demo running on {device}")
 
     # Slightly larger than the unit-test tiny config so concept control is stable.
-    config = rey_tiny_config()
+    config = rej_tiny_config()
     config.d_model = 128
     config.n_layers = 4
     config.n_heads = 4
     config.n_concepts = 8
     config.d_concept = 64
 
-    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
+    tokenizer = RejTokenizer(vocab_size=config.vocab_size)
 
     sequences, controls = build_controlled_dataset(tokenizer, n_examples=400)
     dataset = list(zip(sequences, controls))
@@ -115,7 +115,7 @@ def main():
         ),
     )
 
-    model = ReyRNM(config).to(device)
+    model = RejRNM(config).to(device)
     print(f"Demo model parameters: {model.count_parameters():,}")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)

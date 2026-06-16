@@ -1,4 +1,4 @@
-"""CLI entry point for pretraining Rey-1B."""
+"""CLI entry point for pretraining Rej-1B."""
 from __future__ import annotations
 
 import argparse
@@ -8,11 +8,11 @@ import os
 import torch
 from torch.utils.data import DataLoader
 
-from rey_1b.config import ReyConfig
-from rey_1b.model import ReyRNM
-from rey_1b.tokenizer import ReyTokenizer
-from rey_1b.train import TokenDataset, collate_fn, train
-from rey_1b.utils import get_device, save_checkpoint
+from rej_1b.config import RejConfig
+from rej_1b.model import RejRNM
+from rej_1b.tokenizer import RejTokenizer
+from rej_1b.train import TokenDataset, collate_fn, train
+from rej_1b.utils import get_device, save_checkpoint
 
 
 def load_text_corpus(path: str) -> str:
@@ -21,7 +21,7 @@ def load_text_corpus(path: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pretrain a Rey-1B model.")
+    parser = argparse.ArgumentParser(description="Pretrain a Rej-1B model.")
     parser.add_argument("--config", type=str, required=True, help="Path to config JSON file.")
     parser.add_argument("--data", type=str, required=True, help="Path to text corpus.")
     parser.add_argument("--output_dir", type=str, default="./checkpoints", help="Checkpoint dir.")
@@ -33,8 +33,8 @@ def main():
     parser.add_argument("--save_every", type=int, default=500, help="Checkpoint frequency.")
     args = parser.parse_args()
 
-    config = ReyConfig.from_json(args.config)
-    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
+    config = RejConfig.from_json(args.config)
+    tokenizer = RejTokenizer(vocab_size=config.vocab_size)
 
     print(f"Loading data from {args.data}")
     text = load_text_corpus(args.data)
@@ -50,7 +50,7 @@ def main():
     device = get_device(args.device)
     print(f"Using device: {device}")
 
-    model = ReyRNM(config).to(device)
+    model = RejRNM(config).to(device)
     print(f"Model parameters: {model.count_parameters():,}")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)

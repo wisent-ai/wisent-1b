@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rey-1b"
+name = "rej-1b"
 version = "0.1.0"
-description = "Rey-1B: A Representation-Native Language Model with Explicit Concept Control"
+description = "Rej-1B: A Representation-Native Language Model with Explicit Concept Control"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -41,12 +41,12 @@ dev = [
 ]
 
 [project.scripts]
-rey-1b-train = "scripts.train:main"
-rey-1b-generate = "scripts.generate:main"
+rej-1b-train = "scripts.train:main"
+rej-1b-generate = "scripts.generate:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rey_1b*", "scripts*"]
+include = ["rej_1b*", "scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

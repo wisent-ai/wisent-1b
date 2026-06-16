@@ -1,4 +1,4 @@
-"""Advanced Rey RNM v2: geometric concepts baked into the architecture.
+"""Advanced Rej RNM v2: geometric concepts baked into the architecture.
 
 Concepts are no longer single vectors. Each concept is a subspace (basis + centroid)
 optionally carrying a probabilistic state (mean + std). Concept dynamics are non-linear
@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .config import ReyConfigV2
+from .config import RejConfigV2
 from .model import FeedForward, FlexibleMultiHeadAttention
 
 
@@ -36,7 +36,7 @@ def orthonormalize(x: torch.Tensor) -> torch.Tensor:
 class SubspaceConceptBank(nn.Module):
     """Bank of concept subspaces: basis + centroid per concept slot."""
 
-    def __init__(self, config: ReyConfigV2):
+    def __init__(self, config: RejConfigV2):
         super().__init__()
         self.config = config
         self.rank = config.subspace_rank
@@ -136,7 +136,7 @@ class ConceptRouter(nn.Module):
 class NonlinearConceptCell(nn.Module):
     """MLP-based read/update/write for concept dynamics."""
 
-    def __init__(self, config: ReyConfigV2):
+    def __init__(self, config: RejConfigV2):
         super().__init__()
         self.config = config
         d = config.d_model
@@ -242,7 +242,7 @@ class SteeringManifold(nn.Module):
     adding a context-specific shift to the concept state.
     """
 
-    def __init__(self, config: ReyConfigV2):
+    def __init__(self, config: RejConfigV2):
         super().__init__()
         self.config = config
         self.n_named = config.n_named_concepts
@@ -287,7 +287,7 @@ class SteeringManifold(nn.Module):
 class GeometricControl(nn.Module):
     """Maps user controls to subspace-coordinate concept modifications."""
 
-    def __init__(self, config: ReyConfigV2):
+    def __init__(self, config: RejConfigV2):
         super().__init__()
         self.config = config
         self.rank = config.subspace_rank
@@ -337,7 +337,7 @@ class GeometricControl(nn.Module):
 class ConceptAlignmentHead(nn.Module):
     """Predict named-concept control magnitudes from concept embeddings.
 
-    This bakes the Rey-1B concept-alignment idea into the model: the concept
+    This bakes the Rej-1B concept-alignment idea into the model: the concept
     stream should contain enough information to reconstruct the control labels
     that were injected during training.
     """
@@ -359,10 +359,10 @@ class ConceptAlignmentHead(nn.Module):
         return self.net(pooled)
 
 
-class ReyRNMv2(nn.Module):
-    """Rey Representation-Native Model v2 with geometric concepts."""
+class RejRNMv2(nn.Module):
+    """Rej Representation-Native Model v2 with geometric concepts."""
 
-    def __init__(self, config: ReyConfigV2):
+    def __init__(self, config: RejConfigV2):
         super().__init__()
         self.config = config
 

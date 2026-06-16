@@ -1,4 +1,4 @@
-"""Controlled generation for Rey-1B."""
+"""Controlled generation for Rej-1B."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,9 +7,9 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 import torch.nn.functional as F
 
-from .model import ReyRNM
-from .model_v2 import ReyRNMv2
-from .tokenizer import ReyTokenizer
+from .model import RejRNM
+from .model_v2 import RejRNMv2
+from .tokenizer import RejTokenizer
 
 
 @dataclass
@@ -51,8 +51,8 @@ def _aggregate_concept_trace(
 
 
 def generate(
-    model: ReyRNM,
-    tokenizer: ReyTokenizer,
+    model: RejRNM,
+    tokenizer: RejTokenizer,
     prompt: str,
     controls: Optional[Dict[str, float]] = None,
     max_new_tokens: int = 50,
@@ -67,8 +67,8 @@ def generate(
     """Generate text with explicit concept controls.
 
     Args:
-        model: a ReyRNM model.
-        tokenizer: a ReyTokenizer.
+        model: a RejRNM model.
+        tokenizer: a RejTokenizer.
         prompt: input text.
         controls: mapping from named concept to scalar magnitude.
         max_new_tokens: number of tokens to generate.
@@ -193,8 +193,8 @@ def _geometric_controls_to_tensor(
 
 
 def generate_v2(
-    model: ReyRNMv2,
-    tokenizer: ReyTokenizer,
+    model: RejRNMv2,
+    tokenizer: RejTokenizer,
     prompt: str,
     controls: Optional[Dict[str, Union[float, Dict[str, float]]]] = None,
     max_new_tokens: int = 50,
@@ -210,8 +210,8 @@ def generate_v2(
     """Generate text with geometric concept controls (v2 model).
 
     Args:
-        model: a ReyRNMv2 model.
-        tokenizer: a ReyTokenizer.
+        model: a RejRNMv2 model.
+        tokenizer: a RejTokenizer.
         prompt: input text.
         controls: mapping from control mode to {concept_name: value}.
             Modes: magnitude, direction, uncertainty, select.

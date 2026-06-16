@@ -1,10 +1,10 @@
-"""Tests for ReyRNMv2 geometric concept architecture."""
+"""Tests for RejRNMv2 geometric concept architecture."""
 import math
 
 import torch
 
-from rey_1b.config import rey_tiny_v2_config
-from rey_1b.model_v2 import ReyRNMv2, orthonormalize
+from rej_1b.config import rej_tiny_v2_config
+from rej_1b.model_v2 import RejRNMv2, orthonormalize
 
 
 def test_orthonormalize():
@@ -17,8 +17,8 @@ def test_orthonormalize():
 
 
 def test_forward_shape():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     B, T = 2, 16
     input_ids = torch.randint(0, config.vocab_size, (B, T))
     outputs = model(input_ids)
@@ -28,8 +28,8 @@ def test_forward_shape():
 
 
 def test_forward_with_concept_trace():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     outputs = model(input_ids, return_concept_trace=True)
     trace = outputs["concept_trace"]
@@ -42,8 +42,8 @@ def test_forward_with_concept_trace():
 
 
 def test_geometric_magnitude_control():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     controls = {"magnitude": torch.zeros(1, config.n_named_concepts)}
     controls["magnitude"][0, 0] = 2.0
@@ -52,8 +52,8 @@ def test_geometric_magnitude_control():
 
 
 def test_geometric_direction_control():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     controls = {
         "direction": torch.zeros(1, config.n_named_concepts, config.subspace_rank),
@@ -64,8 +64,8 @@ def test_geometric_direction_control():
 
 
 def test_unknown_control_mode_raises():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     controls = {"bad_mode": torch.zeros(1, 1)}
     try:
@@ -76,8 +76,8 @@ def test_unknown_control_mode_raises():
 
 
 def test_deterministic_sampling():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     model.eval()
     with torch.no_grad():
@@ -87,8 +87,8 @@ def test_deterministic_sampling():
 
 
 def test_subspace_projection_roundtrip():
-    config = rey_tiny_v2_config()
-    bank = ReyRNMv2(config).concept_bank
+    config = rej_tiny_v2_config()
+    bank = RejRNMv2(config).concept_bank
     basis = bank.get_basis()
     # Build vectors that lie exactly in the concept subspaces.
     coords = torch.randn(2, config.n_concepts, config.subspace_rank)
@@ -99,9 +99,9 @@ def test_subspace_projection_roundtrip():
 
 
 def test_router_weights_sum_to_one():
-    config = rey_tiny_v2_config()
+    config = rej_tiny_v2_config()
     config.use_concept_router = True
-    model = ReyRNMv2(config)
+    model = RejRNMv2(config)
     tokens = torch.randn(2, 10, config.d_model)
     weights = model.router(tokens)
     assert weights.shape == (2, config.n_concepts, 10)
@@ -110,22 +110,22 @@ def test_router_weights_sum_to_one():
 
 
 def test_named_concept_labels():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     assert model.named_concept_labels == config.named_concepts
 
 
 def test_titan_manifold_changes_named_concepts():
-    config = rey_tiny_v2_config()
+    config = rej_tiny_v2_config()
     config.use_titan_manifold = True
-    model = ReyRNMv2(config)
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     model.eval()
     with torch.no_grad():
         out_with = model(input_ids, deterministic=True)["logits"]
 
     config.use_titan_manifold = False
-    model_no = ReyRNMv2(config)
+    model_no = RejRNMv2(config)
     # Copy token-stream weights so only manifold differs.
     model_no.load_state_dict(model.state_dict(), strict=False)
     model_no.eval()
@@ -136,9 +136,9 @@ def test_titan_manifold_changes_named_concepts():
 
 
 def test_geometry_loss_returned():
-    config = rey_tiny_v2_config()
+    config = rej_tiny_v2_config()
     config.use_geometry_regularization = True
-    model = ReyRNMv2(config)
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids)
     assert "geometry_loss" in outputs

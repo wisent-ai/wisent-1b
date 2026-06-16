@@ -1,4 +1,4 @@
-"""Tiny geometric demo for ReyRNMv2.
+"""Tiny geometric demo for RejRNMv2.
 
 Trains a tiny v2 model on two opposite completions controlled by the
 magnitude of the "truthfulness" concept, then shows generation under
@@ -12,11 +12,11 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from rey_1b.config import rey_tiny_v2_config
-from rey_1b.model_v2 import ReyRNMv2
-from rey_1b.tokenizer import ReyTokenizer
-from rey_1b.generate import generate_v2
-from rey_1b.utils import get_device
+from rej_1b.config import rej_tiny_v2_config
+from rej_1b.model_v2 import RejRNMv2
+from rej_1b.tokenizer import RejTokenizer
+from rej_1b.generate import generate_v2
+from rej_1b.utils import get_device
 
 
 def build_controlled_dataset(tokenizer, n_examples: int = 400):
@@ -97,12 +97,12 @@ def main():
     device = get_device(preferred="cpu")
     print(f"Demo running on {device}")
 
-    config = rey_tiny_v2_config()
+    config = rej_tiny_v2_config()
     config.use_concept_alignment = False
     config.use_geometry_regularization = False
     config.use_titan_manifold = False
     config.kl_weight = 1e-4
-    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
+    tokenizer = RejTokenizer(vocab_size=config.vocab_size)
 
     sequences, controls = build_controlled_dataset(tokenizer, n_examples=400)
     dataset = list(zip(sequences, controls))
@@ -118,7 +118,7 @@ def main():
         ),
     )
 
-    model = ReyRNMv2(config).to(device)
+    model = RejRNMv2(config).to(device)
     print(f"Demo model parameters: {model.count_parameters():,}")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)

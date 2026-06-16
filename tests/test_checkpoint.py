@@ -4,15 +4,15 @@ import tempfile
 
 import torch
 
-from rey_1b.config import rey_tiny_config, rey_tiny_v2_config
-from rey_1b.model import ReyRNM
-from rey_1b.model_v2 import ReyRNMv2
-from rey_1b.utils import save_checkpoint, load_checkpoint
+from rej_1b.config import rej_tiny_config, rej_tiny_v2_config
+from rej_1b.model import RejRNM
+from rej_1b.model_v2 import RejRNMv2
+from rej_1b.utils import save_checkpoint, load_checkpoint
 
 
 def test_save_load_v1():
-    config = rey_tiny_config()
-    model = ReyRNM(config)
+    config = rej_tiny_config()
+    model = RejRNM(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     model.eval()
     with torch.no_grad():
@@ -23,15 +23,15 @@ def test_save_load_v1():
         assert os.path.exists(path)
 
         loaded = load_checkpoint(path, device="cpu")
-        assert isinstance(loaded, ReyRNM)
+        assert isinstance(loaded, RejRNM)
         with torch.no_grad():
             actual = loaded(input_ids)["logits"]
         assert torch.allclose(expected, actual, atol=1e-6)
 
 
 def test_save_load_v2():
-    config = rey_tiny_v2_config()
-    model = ReyRNMv2(config)
+    config = rej_tiny_v2_config()
+    model = RejRNMv2(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     model.eval()
     with torch.no_grad():
@@ -42,7 +42,7 @@ def test_save_load_v2():
         assert os.path.exists(path)
 
         loaded = load_checkpoint(path, device="cpu")
-        assert isinstance(loaded, ReyRNMv2)
+        assert isinstance(loaded, RejRNMv2)
         loaded.eval()
         with torch.no_grad():
             actual = loaded(input_ids, deterministic=True)["logits"]

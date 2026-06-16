@@ -1,4 +1,4 @@
-"""Rey Representation-Native Model (RNM) architecture."""
+"""Rej Representation-Native Model (RNM) architecture."""
 from __future__ import annotations
 
 import math
@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .config import ReyConfig
+from .config import RejConfig
 
 
 class FlexibleMultiHeadAttention(nn.Module):
@@ -132,10 +132,10 @@ class FeedForward(nn.Module):
         return x
 
 
-class ReyLayer(nn.Module):
-    """One Rey RNM layer: dual token + concept stream with read/update/write."""
+class RejLayer(nn.Module):
+    """One Rej RNM layer: dual token + concept stream with read/update/write."""
 
-    def __init__(self, config: ReyConfig):
+    def __init__(self, config: RejConfig):
         super().__init__()
         self.config = config
         d = config.d_model
@@ -239,10 +239,10 @@ class ReyLayer(nn.Module):
         return tokens, concepts
 
 
-class ReyRNM(nn.Module):
-    """Rey Representation-Native Model."""
+class RejRNM(nn.Module):
+    """Rej Representation-Native Model."""
 
-    def __init__(self, config: ReyConfig):
+    def __init__(self, config: RejConfig):
         super().__init__()
         self.config = config
 
@@ -263,7 +263,7 @@ class ReyRNM(nn.Module):
             torch.randn(config.n_named_concepts, config.d_model) * config.initializer_range
         )
 
-        self.layers = nn.ModuleList([ReyLayer(config) for _ in range(config.n_layers)])
+        self.layers = nn.ModuleList([RejLayer(config) for _ in range(config.n_layers)])
 
         self.token_ln = nn.LayerNorm(config.d_model, eps=config.layer_norm_eps)
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)

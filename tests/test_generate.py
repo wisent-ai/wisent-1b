@@ -1,10 +1,10 @@
 """Tests for controlled generation."""
 import torch
 
-from rey_1b.config import rey_tiny_config
-from rey_1b.generate import generate, _controls_to_tensor
-from rey_1b.model import ReyRNM
-from rey_1b.tokenizer import ReyTokenizer
+from rej_1b.config import rej_tiny_config
+from rej_1b.generate import generate, _controls_to_tensor
+from rej_1b.model import RejRNM
+from rej_1b.tokenizer import RejTokenizer
 
 
 def test_controls_to_tensor():
@@ -18,9 +18,9 @@ def test_controls_to_tensor():
 
 
 def test_generate_runs():
-    config = rey_tiny_config()
-    model = ReyRNM(config)
-    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
+    config = rej_tiny_config()
+    model = RejRNM(config)
+    tokenizer = RejTokenizer(vocab_size=config.vocab_size)
     out = generate(
         model,
         tokenizer,
@@ -34,9 +34,9 @@ def test_generate_runs():
 
 
 def test_generate_with_trace():
-    config = rey_tiny_config()
-    model = ReyRNM(config)
-    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
+    config = rej_tiny_config()
+    model = RejRNM(config)
+    tokenizer = RejTokenizer(vocab_size=config.vocab_size)
     out = generate(
         model,
         tokenizer,
