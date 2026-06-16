@@ -1,10 +1,10 @@
 """Tests for controlled generation."""
 import torch
 
-from wisent_1b.config import wisent_tiny_config
-from wisent_1b.generate import generate, _controls_to_tensor
-from wisent_1b.model import WisentRNM
-from wisent_1b.tokenizer import WisentTokenizer
+from rey_1b.config import rey_tiny_config
+from rey_1b.generate import generate, _controls_to_tensor
+from rey_1b.model import ReyRNM
+from rey_1b.tokenizer import ReyTokenizer
 
 
 def test_controls_to_tensor():
@@ -18,9 +18,9 @@ def test_controls_to_tensor():
 
 
 def test_generate_runs():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
-    tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
+    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
     out = generate(
         model,
         tokenizer,
@@ -34,9 +34,9 @@ def test_generate_runs():
 
 
 def test_generate_with_trace():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
-    tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
+    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
     out = generate(
         model,
         tokenizer,

@@ -1,13 +1,13 @@
-"""Tests for WisentRNM architecture."""
+"""Tests for ReyRNM architecture."""
 import torch
 
-from wisent_1b.config import wisent_tiny_config
-from wisent_1b.model import WisentRNM
+from rey_1b.config import rey_tiny_config
+from rey_1b.model import ReyRNM
 
 
 def test_forward_shape():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
     B, T = 2, 16
     input_ids = torch.randint(0, config.vocab_size, (B, T))
     outputs = model(input_ids)
@@ -16,8 +16,8 @@ def test_forward_shape():
 
 
 def test_forward_with_concept_trace():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     outputs = model(input_ids, return_concept_trace=True)
     trace = outputs["concept_trace"]
@@ -28,8 +28,8 @@ def test_forward_with_concept_trace():
 
 
 def test_control_intervention():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     controls = torch.zeros(1, config.n_named_concepts)
     controls[0, 0] = 2.0  # boost first named concept
@@ -38,8 +38,8 @@ def test_control_intervention():
 
 
 def test_unknown_control_raises():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
     input_ids = torch.randint(0, config.vocab_size, (1, 8))
     # _build_concept_control validates against n_named_concepts, not names.
     controls = torch.zeros(1, config.n_named_concepts + 1)
@@ -51,6 +51,6 @@ def test_unknown_control_raises():
 
 
 def test_named_concept_labels():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
     assert model.named_concept_labels == config.named_concepts

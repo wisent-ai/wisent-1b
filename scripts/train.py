@@ -1,4 +1,4 @@
-"""CLI entry point for pretraining Wisent-1B."""
+"""CLI entry point for pretraining Rey-1B."""
 from __future__ import annotations
 
 import argparse
@@ -8,11 +8,11 @@ import os
 import torch
 from torch.utils.data import DataLoader
 
-from wisent_1b.config import WisentConfig
-from wisent_1b.model import WisentRNM
-from wisent_1b.tokenizer import WisentTokenizer
-from wisent_1b.train import TokenDataset, collate_fn, train
-from wisent_1b.utils import get_device, save_checkpoint
+from rey_1b.config import ReyConfig
+from rey_1b.model import ReyRNM
+from rey_1b.tokenizer import ReyTokenizer
+from rey_1b.train import TokenDataset, collate_fn, train
+from rey_1b.utils import get_device, save_checkpoint
 
 
 def load_text_corpus(path: str) -> str:
@@ -21,7 +21,7 @@ def load_text_corpus(path: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pretrain a Wisent-1B model.")
+    parser = argparse.ArgumentParser(description="Pretrain a Rey-1B model.")
     parser.add_argument("--config", type=str, required=True, help="Path to config JSON file.")
     parser.add_argument("--data", type=str, required=True, help="Path to text corpus.")
     parser.add_argument("--output_dir", type=str, default="./checkpoints", help="Checkpoint dir.")
@@ -33,8 +33,8 @@ def main():
     parser.add_argument("--save_every", type=int, default=500, help="Checkpoint frequency.")
     args = parser.parse_args()
 
-    config = WisentConfig.from_json(args.config)
-    tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
+    config = ReyConfig.from_json(args.config)
+    tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
 
     print(f"Loading data from {args.data}")
     text = load_text_corpus(args.data)
@@ -50,7 +50,7 @@ def main():
     device = get_device(args.device)
     print(f"Using device: {device}")
 
-    model = WisentRNM(config).to(device)
+    model = ReyRNM(config).to(device)
     print(f"Model parameters: {model.count_parameters():,}")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)

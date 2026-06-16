@@ -2,10 +2,10 @@
 import torch
 from torch.utils.data import DataLoader
 
-from wisent_1b.config import wisent_tiny_config
-from wisent_1b.model import WisentRNM
-from wisent_1b.tokenizer import WisentTokenizer
-from wisent_1b.train import (
+from rey_1b.config import rey_tiny_config
+from rey_1b.model import ReyRNM
+from rey_1b.tokenizer import ReyTokenizer
+from rey_1b.train import (
     TokenDataset, collate_fn, compute_lm_loss, train_step, train_step_v2,
 )
 
@@ -19,8 +19,8 @@ def test_compute_lm_loss():
 
 
 def test_train_step():
-    config = wisent_tiny_config()
-    model = WisentRNM(config)
+    config = rey_tiny_config()
+    model = ReyRNM(config)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     batch = torch.randint(0, config.vocab_size, (2, 16))
     loss = train_step(model, batch, optimizer, torch.device("cpu"))
@@ -29,7 +29,7 @@ def test_train_step():
 
 
 def test_token_dataset():
-    tokenizer = WisentTokenizer(vocab_size=256)
+    tokenizer = ReyTokenizer(vocab_size=256)
     ids = tokenizer.encode("the cat sat on the mat . " * 10)
     dataset = TokenDataset([ids], seq_length=8)
     assert len(dataset) > 0
@@ -45,11 +45,11 @@ def test_collate_fn():
 
 
 def test_train_step_v2_with_perturbation():
-    from wisent_1b.config import wisent_tiny_v2_config
-    from wisent_1b.model_v2 import WisentRNMv2
+    from rey_1b.config import rey_tiny_v2_config
+    from rey_1b.model_v2 import ReyRNMv2
 
-    config = wisent_tiny_v2_config()
-    model = WisentRNMv2(config)
+    config = rey_tiny_v2_config()
+    model = ReyRNMv2(config)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     batch = torch.randint(0, config.vocab_size, (2, 16))
     metrics = train_step_v2(
@@ -63,13 +63,13 @@ def test_train_step_v2_with_perturbation():
 
 
 def test_train_step_v2_aligned():
-    from wisent_1b.config import wisent_tiny_v2_config
-    from wisent_1b.model_v2 import WisentRNMv2
-    from wisent_1b.train import train_step_v2_aligned
+    from rey_1b.config import rey_tiny_v2_config
+    from rey_1b.model_v2 import ReyRNMv2
+    from rey_1b.train import train_step_v2_aligned
 
-    config = wisent_tiny_v2_config()
+    config = rey_tiny_v2_config()
     config.use_concept_alignment = True
-    model = WisentRNMv2(config)
+    model = ReyRNMv2(config)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     batch_tokens = torch.randint(0, config.vocab_size, (2, 16))
     batch_controls = torch.randn(2, config.n_named_concepts)
@@ -84,13 +84,13 @@ def test_train_step_v2_aligned():
 
 
 def test_train_step_v2_multilingual():
-    from wisent_1b.config import wisent_tiny_v2_config
-    from wisent_1b.model_v2 import WisentRNMv2
-    from wisent_1b.train import train_step_v2_multilingual
+    from rey_1b.config import rey_tiny_v2_config
+    from rey_1b.model_v2 import ReyRNMv2
+    from rey_1b.train import train_step_v2_multilingual
 
-    config = wisent_tiny_v2_config()
+    config = rey_tiny_v2_config()
     config.use_language_invariant_concepts = True
-    model = WisentRNMv2(config)
+    model = ReyRNMv2(config)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     batch_l1 = torch.randint(0, config.vocab_size, (2, 12))
     batch_l2 = torch.randint(0, config.vocab_size, (2, 14))

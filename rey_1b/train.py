@@ -1,4 +1,4 @@
-"""Causal language modeling training for Wisent-1B."""
+"""Causal language modeling training for Rey-1B."""
 from __future__ import annotations
 
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
@@ -8,8 +8,8 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from .model import WisentRNM
-from .model_v2 import WisentRNMv2
+from .model import ReyRNM
+from .model_v2 import ReyRNMv2
 
 
 class TokenDataset(Dataset):
@@ -53,7 +53,7 @@ def compute_lm_loss(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
 
 
 def train_step(
-    model: WisentRNM,
+    model: ReyRNM,
     batch: torch.Tensor,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -71,7 +71,7 @@ def train_step(
 
 
 def train(
-    model: WisentRNM,
+    model: ReyRNM,
     dataset: Iterable[torch.Tensor],
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -80,7 +80,7 @@ def train(
     save_every: int | None = None,
     save_fn=None,
 ) -> List[float]:
-    """Train a WisentRNM model on a token dataset.
+    """Train a ReyRNM model on a token dataset.
 
     Args:
         model: the model to train.
@@ -120,7 +120,7 @@ def train(
 
 
 def compute_v2_loss(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     batch: torch.Tensor,
     controls: Optional[Dict[str, torch.Tensor]] = None,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
@@ -164,7 +164,7 @@ def _random_magnitude_controls(
 
 
 def train_step_v2(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     batch: torch.Tensor,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -216,7 +216,7 @@ def compute_language_invariant_loss(
 
 
 def train_step_v2_aligned(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     batch_tokens: torch.Tensor,
     batch_controls: torch.Tensor,
     optimizer: torch.optim.Optimizer,
@@ -265,7 +265,7 @@ def train_step_v2_aligned(
 
 
 def train_step_v2_multilingual(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     batch_tokens_l1: torch.Tensor,
     batch_tokens_l2: torch.Tensor,
     batch_controls: torch.Tensor,
@@ -343,7 +343,7 @@ def train_step_v2_multilingual(
 
 
 def train_v2_multilingual(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     dataset: Iterable[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -352,7 +352,7 @@ def train_v2_multilingual(
     save_every: int | None = None,
     save_fn=None,
 ) -> List[Dict[str, float]]:
-    """Train WisentRNMv2 with parallel multilingual concept supervision.
+    """Train ReyRNMv2 with parallel multilingual concept supervision.
 
     Args:
         model: v2 model.
@@ -399,7 +399,7 @@ def train_v2_multilingual(
 
 
 def train_v2_aligned(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     dataset: Iterable[Tuple[torch.Tensor, torch.Tensor]],
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -408,7 +408,7 @@ def train_v2_aligned(
     save_every: int | None = None,
     save_fn=None,
 ) -> List[Dict[str, float]]:
-    """Train WisentRNMv2 with concept-alignment supervision.
+    """Train ReyRNMv2 with concept-alignment supervision.
 
     Args:
         model: v2 model.
@@ -451,7 +451,7 @@ def train_v2_aligned(
 
 
 def train_v2(
-    model: WisentRNMv2,
+    model: ReyRNMv2,
     dataset: Iterable[torch.Tensor],
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -462,7 +462,7 @@ def train_v2(
     perturb_controls: bool = False,
     perturbation_scale: float = 1.0,
 ) -> List[Dict[str, float]]:
-    """Train a WisentRNMv2 model on a token dataset.
+    """Train a ReyRNMv2 model on a token dataset.
 
     Args:
         model: the v2 model to train.

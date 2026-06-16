@@ -1,4 +1,4 @@
-"""Concept alignment and control fine-tuning for Wisent-1B.
+"""Concept alignment and control fine-tuning for Rey-1B.
 
 This module provides helpers to make the named concept plane controllable.
 It is intentionally lightweight: full concept alignment would require
@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .model import WisentRNM
+from .model import ReyRNM
 
 
 @dataclass
@@ -41,7 +41,7 @@ class ConceptHead(nn.Module):
 
 
 def gather_named_concept_states(
-    model: WisentRNM,
+    model: ReyRNM,
     input_ids: torch.Tensor,
 ) -> torch.Tensor:
     """Return the named concept states from the last layer.
@@ -60,7 +60,7 @@ def gather_named_concept_states(
 
 
 def compute_contrastive_concept_loss(
-    model: WisentRNM,
+    model: ReyRNM,
     tokenizer,
     examples: List[ConceptExample],
     concept_to_index: Dict[str, int],
@@ -99,11 +99,11 @@ def compute_contrastive_concept_loss(
 
 
 class ControlFineTuner:
-    """Fine-tune a Wisent model to respond smoothly to concept interventions."""
+    """Fine-tune a Rey model to respond smoothly to concept interventions."""
 
     def __init__(
         self,
-        model: WisentRNM,
+        model: ReyRNM,
         optimizer: torch.optim.Optimizer,
         device: torch.device,
         perturbation_scale: float = 0.5,

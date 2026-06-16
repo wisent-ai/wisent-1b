@@ -1,4 +1,4 @@
-"""Utility helpers for Wisent-1B."""
+"""Utility helpers for Rey-1B."""
 from __future__ import annotations
 
 import os
@@ -6,9 +6,9 @@ from typing import Dict
 
 import torch
 
-from .config import WisentConfig, WisentConfigV2
-from .model import WisentRNM
-from .model_v2 import WisentRNMv2
+from .config import ReyConfig, ReyConfigV2
+from .model import ReyRNM
+from .model_v2 import ReyRNMv2
 
 
 def get_device(preferred: str | None = None) -> torch.device:
@@ -51,10 +51,10 @@ def load_checkpoint(path: str, device: torch.device | str = "cpu"):
     state = torch.load(path, map_location=device, weights_only=False)
     config_data = state["config"]
     if config_data.get("subspace_rank") is not None:
-        config = WisentConfigV2.from_dict(config_data)
-        model = WisentRNMv2(config).to(device)
+        config = ReyConfigV2.from_dict(config_data)
+        model = ReyRNMv2(config).to(device)
     else:
-        config = WisentConfig.from_dict(config_data)
-        model = WisentRNM(config).to(device)
+        config = ReyConfig.from_dict(config_data)
+        model = ReyRNM(config).to(device)
     model.load_state_dict(state["model_state_dict"])
     return model

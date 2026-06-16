@@ -1,4 +1,4 @@
-"""Wisent Representation-Native Model (RNM) architecture."""
+"""Rey Representation-Native Model (RNM) architecture."""
 from __future__ import annotations
 
 import math
@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .config import WisentConfig
+from .config import ReyConfig
 
 
 class FlexibleMultiHeadAttention(nn.Module):
@@ -132,10 +132,10 @@ class FeedForward(nn.Module):
         return x
 
 
-class WisentLayer(nn.Module):
-    """One Wisent RNM layer: dual token + concept stream with read/update/write."""
+class ReyLayer(nn.Module):
+    """One Rey RNM layer: dual token + concept stream with read/update/write."""
 
-    def __init__(self, config: WisentConfig):
+    def __init__(self, config: ReyConfig):
         super().__init__()
         self.config = config
         d = config.d_model
@@ -239,10 +239,10 @@ class WisentLayer(nn.Module):
         return tokens, concepts
 
 
-class WisentRNM(nn.Module):
-    """Wisent Representation-Native Model."""
+class ReyRNM(nn.Module):
+    """Rey Representation-Native Model."""
 
-    def __init__(self, config: WisentConfig):
+    def __init__(self, config: ReyConfig):
         super().__init__()
         self.config = config
 
@@ -263,7 +263,7 @@ class WisentRNM(nn.Module):
             torch.randn(config.n_named_concepts, config.d_model) * config.initializer_range
         )
 
-        self.layers = nn.ModuleList([WisentLayer(config) for _ in range(config.n_layers)])
+        self.layers = nn.ModuleList([ReyLayer(config) for _ in range(config.n_layers)])
 
         self.token_ln = nn.LayerNorm(config.d_model, eps=config.layer_norm_eps)
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)

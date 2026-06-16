@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wisent-1b"
+name = "rey-1b"
 version = "0.1.0"
-description = "Wisent-1B: A Representation-Native Language Model with Explicit Concept Control"
+description = "Rey-1B: A Representation-Native Language Model with Explicit Concept Control"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -41,12 +41,12 @@ dev = [
 ]
 
 [project.scripts]
-wisent-1b-train = "scripts.train:main"
-wisent-1b-generate = "scripts.generate:main"
+rey-1b-train = "scripts.train:main"
+rey-1b-generate = "scripts.generate:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["wisent_1b*", "scripts*"]
+include = ["rey_1b*", "scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

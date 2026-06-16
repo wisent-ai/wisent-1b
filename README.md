@@ -1,17 +1,17 @@
-# Wisent-1B
+# Rey-1B
 
-A reference implementation of **Wisent-1B**, a Representation-Native Language Model (RNM) with an explicit concept stream.
+A reference implementation of **Rey-1B**, a Representation-Native Language Model (RNM) with an explicit concept stream.
 
 > **Key idea:** concepts are not a post-hoc decomposition of hidden states; they are a separate computational state that reads from tokens, updates itself across layers, and writes back into generation.
 
 ## What's inside
 
-- `wisent_1b/model.py` — `WisentRNM` and `WisentLayer` implementing the dual-stream architecture.
-- `wisent_1b/model_v2.py` — `WisentRNMv2`, an advanced geometry-native version (subspaces, probabilistic concepts, non-linear cells, manifold decoder).
-- `wisent_1b/config.py` — `WisentConfig` / `WisentConfigV2`, plus factory helpers.
-- `wisent_1b/generate.py` — controlled generation for v1 (`generate`) and v2 (`generate_v2`).
-- `wisent_1b/train.py` — causal language-modeling training utilities for v1 and v2.
-- `wisent_1b/control.py` — lightweight helpers for concept alignment and control fine-tuning.
+- `rey_1b/model.py` — `ReyRNM` and `ReyLayer` implementing the dual-stream architecture.
+- `rey_1b/model_v2.py` — `ReyRNMv2`, an advanced geometry-native version (subspaces, probabilistic concepts, non-linear cells, manifold decoder).
+- `rey_1b/config.py` — `ReyConfig` / `ReyConfigV2`, plus factory helpers.
+- `rey_1b/generate.py` — controlled generation for v1 (`generate`) and v2 (`generate_v2`).
+- `rey_1b/train.py` — causal language-modeling training utilities for v1 and v2.
+- `rey_1b/control.py` — lightweight helpers for concept alignment and control fine-tuning.
 - `scripts/demo_toy.py` — end-to-end demo of v1 concept control on synthetic data.
 - `scripts/demo_geometric.py` — end-to-end demo of v2 geometric concept control.
 - `scripts/train.py` / `scripts/generate.py` — CLI entry points.
@@ -20,13 +20,13 @@ A reference implementation of **Wisent-1B**, a Representation-Native Language Mo
 ## Install
 
 ```bash
-cd wisent-1b
+cd rey-1b
 pip install -e .
 ```
 
 ## Quick demo
 
-Run the toy demo to see a tiny Wisent model learn that `truthfulness=+2.0` and `truthfulness=-2.0` produce different continuations for the same prompt:
+Run the toy demo to see a tiny Rey model learn that `truthfulness=+2.0` and `truthfulness=-2.0` produce different continuations for the same prompt:
 
 ```bash
 python scripts/demo_toy.py
@@ -47,7 +47,7 @@ Expected output (approximate):
 
 ## Architecture overview
 
-Each `WisentLayer` maintains two streams:
+Each `ReyLayer` maintains two streams:
 
 1. **Token stream** — standard causal self-attention over tokens.
 2. **Concept stream** — `K` concept slots of dimension `d_concept`.
@@ -72,9 +72,9 @@ Controls are applied in two ways:
 
 This dual-path design keeps training stable while preserving the representation-native concept stream.
 
-## WisentRNMv2: geometric concepts (advanced)
+## ReyRNMv2: geometric concepts (advanced)
 
-`WisentRNMv2` bakes geometry into the architecture itself, rather than applying scalar steering after training:
+`ReyRNMv2` bakes geometry into the architecture itself, rather than applying scalar steering after training:
 
 - **Subspace concepts** — each concept is a rank-`r` subspace (`basis` + `centroid`) instead of a single vector.
 - **Probabilistic concept state** — each concept carries a Gaussian `N(mean, std²)` in subspace coordinates, regularized by a KL term during training.
@@ -101,11 +101,11 @@ python scripts/demo_geometric.py
 ### Python API (v2)
 
 ```python
-from wisent_1b import WisentRNMv2, WisentTokenizer, generate_v2, wisent_tiny_v2_config
+from rey_1b import ReyRNMv2, ReyTokenizer, generate_v2, rey_tiny_v2_config
 
-config = wisent_tiny_v2_config()
-model = WisentRNMv2(config)
-tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
+config = rey_tiny_v2_config()
+model = ReyRNMv2(config)
+tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
 
 out = generate_v2(
     model,
@@ -129,7 +129,7 @@ print(out.concept_trace["truthfulness"])  # per-layer subspace mean
 
 ```bash
 python scripts/train.py \
-  --config configs/wisent_1b.json \
+  --config configs/rey_1b.json \
   --data corpus.txt \
   --output_dir checkpoints \
   --num_steps 10000 \
@@ -151,14 +151,14 @@ python scripts/generate.py \
 ### v2 training APIs
 
 ```python
-from wisent_1b import WisentRNMv2, wisent_tiny_v2_config
-from wisent_1b.train import train_v2, train_v2_aligned, train_v2_multilingual
+from rey_1b import ReyRNMv2, rey_tiny_v2_config
+from rey_1b.train import train_v2, train_v2_aligned, train_v2_multilingual
 
-config = wisent_tiny_v2_config()
+config = rey_tiny_v2_config()
 config.use_concept_alignment = True
 config.use_titan_manifold = True
 config.use_geometry_regularization = True
-model = WisentRNMv2(config)
+model = ReyRNMv2(config)
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
 # LM pretraining with random control perturbations.
@@ -176,11 +176,11 @@ train_v2_multilingual(model, parallel_batches, optimizer, device, num_steps=1000
 ### Python API
 
 ```python
-from wisent_1b import WisentRNM, WisentTokenizer, generate, wisent_1b_config
+from rey_1b import ReyRNM, ReyTokenizer, generate, rey_1b_config
 
-config = wisent_1b_config()
-model = WisentRNM(config)
-tokenizer = WisentTokenizer(vocab_size=config.vocab_size)
+config = rey_1b_config()
+model = ReyRNM(config)
+tokenizer = ReyTokenizer(vocab_size=config.vocab_size)
 
 out = generate(
     model,
@@ -205,13 +205,13 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -v
 
 ## Status
 
-This is a reference implementation of the architecture described in `research/wisent-1b/neurips_2024.tex`. It contains no pretrained 1B weights — only the model definition, training code, and a working toy demo. Scaling to 1B+ parameters requires the data pipeline and compute described in the paper.
+This is a reference implementation of the architecture described in `research/rey-1b/neurips_2024.tex`. It contains no pretrained 1B weights — only the model definition, training code, and a working toy demo. Scaling to 1B+ parameters requires the data pipeline and compute described in the paper.
 
 ## Citation
 
 ```bibtex
-@article{wisent2025,
-  title={Wisent-1B: A Representation-Native Language Model with Explicit Concept Control},
+@article{rey2025,
+  title={Rey-1B: A Representation-Native Language Model with Explicit Concept Control},
   author={Bartoszcze, Lukasz and Towarek, Jakub},
   year={2025}
 }

@@ -1,12 +1,12 @@
-"""CLI entry point for controlled generation with Wisent-1B."""
+"""CLI entry point for controlled generation with Rey-1B."""
 from __future__ import annotations
 
 import argparse
 import json
 
-from wisent_1b.generate import generate
-from wisent_1b.tokenizer import WisentTokenizer
-from wisent_1b.utils import get_device, load_checkpoint
+from rey_1b.generate import generate
+from rey_1b.tokenizer import ReyTokenizer
+from rey_1b.utils import get_device, load_checkpoint
 
 
 def parse_controls(controls_str: str | None) -> dict:
@@ -21,7 +21,7 @@ def parse_controls(controls_str: str | None) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate text with Wisent-1B.")
+    parser = argparse.ArgumentParser(description="Generate text with Rey-1B.")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to checkpoint.")
     parser.add_argument("--prompt", type=str, required=True, help="Input prompt.")
     parser.add_argument("--controls", type=str, default=None, help="Concept controls, e.g. truthfulness=1.2,refusal=-0.5")
@@ -35,7 +35,7 @@ def main():
 
     device = get_device(args.device)
     model = load_checkpoint(args.checkpoint, device=device)
-    tokenizer = WisentTokenizer(vocab_size=model.config.vocab_size)
+    tokenizer = ReyTokenizer(vocab_size=model.config.vocab_size)
 
     controls = parse_controls(args.controls)
     if controls:

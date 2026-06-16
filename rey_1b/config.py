@@ -1,4 +1,4 @@
-"""Configuration dataclass for Wisent RNM models."""
+"""Configuration dataclass for Rey RNM models."""
 from __future__ import annotations
 
 import json
@@ -7,8 +7,8 @@ from typing import List, Optional
 
 
 @dataclass
-class WisentConfig:
-    """Configuration for a Wisent Representation-Native Model.
+class ReyConfig:
+    """Configuration for a Rey Representation-Native Model.
 
     The model maintains two streams:
       - a token stream with hidden dimension ``d_model``
@@ -83,11 +83,11 @@ class WisentConfig:
         return json.dumps(self.to_dict(), indent=indent)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WisentConfig":
+    def from_dict(cls, data: dict) -> "ReyConfig":
         return cls(**data)
 
     @classmethod
-    def from_json(cls, path: str) -> "WisentConfig":
+    def from_json(cls, path: str) -> "ReyConfig":
         with open(path, "r", encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
 
@@ -96,9 +96,9 @@ class WisentConfig:
             f.write(self.to_json())
 
 
-def wisent_1b_config() -> WisentConfig:
+def rey_1b_config() -> ReyConfig:
     """Default configuration targeting ~1B parameters."""
-    return WisentConfig(
+    return ReyConfig(
         vocab_size=32000,
         max_position_embeddings=4096,
         d_model=2048,
@@ -111,9 +111,9 @@ def wisent_1b_config() -> WisentConfig:
     )
 
 
-def wisent_tiny_config() -> WisentConfig:
+def rey_tiny_config() -> ReyConfig:
     """Tiny configuration for fast demos and unit tests."""
-    return WisentConfig(
+    return ReyConfig(
         vocab_size=256,
         max_position_embeddings=128,
         d_model=64,
@@ -128,10 +128,10 @@ def wisent_tiny_config() -> WisentConfig:
 
 
 @dataclass
-class WisentConfigV2(WisentConfig):
-    """Advanced configuration for WisentRNMv2.
+class ReyConfigV2(ReyConfig):
+    """Advanced configuration for ReyRNMv2.
 
-    Extends WisentConfig with subspace, probabilistic, and non-linear concept
+    Extends ReyConfig with subspace, probabilistic, and non-linear concept
     options. Geometry is baked into the architecture rather than applied post-hoc.
     """
 
@@ -184,9 +184,9 @@ class WisentConfigV2(WisentConfig):
             self.concept_mlp_hidden = 4 * self.d_concept
 
 
-def wisent_1b_v2_config() -> WisentConfigV2:
+def rey_1b_v2_config() -> ReyConfigV2:
     """Advanced 1B-scale configuration with geometric concepts."""
-    return WisentConfigV2(
+    return ReyConfigV2(
         vocab_size=32000,
         max_position_embeddings=4096,
         d_model=2048,
@@ -204,9 +204,9 @@ def wisent_1b_v2_config() -> WisentConfigV2:
     )
 
 
-def wisent_tiny_v2_config() -> WisentConfigV2:
+def rey_tiny_v2_config() -> ReyConfigV2:
     """Tiny advanced config for fast experiments."""
-    return WisentConfigV2(
+    return ReyConfigV2(
         vocab_size=256,
         max_position_embeddings=128,
         d_model=128,

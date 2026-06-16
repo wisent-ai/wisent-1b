@@ -1,4 +1,4 @@
-"""Tokenizer for Wisent-1B.
+"""Tokenizer for Rey-1B.
 
 Provides a small, dependency-light character-level tokenizer by default.
 An optional HuggingFace backend can be enabled if ``transformers`` is installed
@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import List, Union
 
 
-class WisentTokenizer:
+class ReyTokenizer:
     """Character-level tokenizer with an optional HuggingFace backend.
 
     Args:
