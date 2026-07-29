@@ -114,6 +114,18 @@ jobs:
             fi
             echo "Baseline $released is served by PyPI, as its marker claims."
           else
+            # Absence is inferred from curl FAILING, and curl also fails on no egress,
+            # DNS failure or PyPI being down -- indistinguishable at this level from the
+            # not-found answer we mean to read. Unchecked, the gate goes green precisely
+            # when it learned nothing, and for a head: baseline this assertion is the
+            # only thing standing between it and a project that quietly acquired a real
+            # release. So prove PyPI is reachable against a project that certainly
+            # exists before reading silence as absence. Found by AgentGateway.
+            if ! curl -sSf "https://pypi.org/pypi/pip/json" >/dev/null; then
+              echo "::error::cannot reach PyPI, so the absence of $project is unproven." \
+                "Refusing rather than assuming it is unpublished."
+              false
+            fi
             if curl -sSf "https://pypi.org/pypi/$project/json" >/dev/null; then
               echo "::error::the baseline is '$marker', but PyPI publishes $project." \
                 "The baseline must be recovered from the latest published artifact," \
