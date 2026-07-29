@@ -124,6 +124,12 @@ def from_registry(name: str) -> dict | None:
     project = ask_pypi(name)
     if project is None:
         return None
+    # PyPI reports the newest STABLE release here, ignoring prereleases, so this does
+    # not baseline onto an rc the day someone uploads one. Visuals measured that across
+    # django, numpy and urllib3. The one state where it misbehaves is a project whose
+    # ONLY releases are prereleases: info.version is then a prerelease and the baseline
+    # would be pinned to it. Documented rather than coded around -- this repository
+    # publishes nothing, so writing speculative handling would be untestable here.
     version = project.get("info", {}).get("version")
     if not isinstance(version, str):
         raise SystemExit(f"PyPI serves {name} but names no latest version")
