@@ -114,25 +114,35 @@ jobs:
             fi
             echo "Baseline $released is served by PyPI, as its marker claims."
           else
-            # Absence is inferred from curl FAILING, and curl also fails on no egress,
-            # DNS failure or PyPI being down -- indistinguishable at this level from the
-            # not-found answer we mean to read. Unchecked, the gate goes green precisely
-            # when it learned nothing, and for a head: baseline this assertion is the
-            # only thing standing between it and a project that quietly acquired a real
-            # release. So prove PyPI is reachable against a project that certainly
-            # exists before reading silence as absence. Found by AgentGateway.
-            if ! curl -sSf "https://pypi.org/pypi/pip/json" >/dev/null; then
-              echo "::error::cannot reach PyPI, so the absence of $project is unproven." \
-                "Refusing rather than assuming it is unpublished."
-              false
-            fi
-            if curl -sSf "https://pypi.org/pypi/$project/json" >/dev/null; then
+            # Absence must be TESTIMONY, never silence. Inferring "not published" from a
+            # failed request reads a dead network, a DNS failure, a rate limit or a
+            # server error as proof of absence, and the uninformative answer is the
+            # PASSING one -- which for a head: baseline is the only thing standing
+            # between it and a project that quietly acquired a real release.
+            #
+            # So require the index to ANSWER: either it names the project, or it states
+            # it has no such project. Anything else -- empty body, an error page, a
+            # permission refusal -- is unproven and refuses. Reading the answer's content
+            # rather than curl's exit status is what separates those cases; a status code
+            # would do it too but every spelling of one is a bare numeral the hook eats.
+            #
+            # `|| true` is safe ONLY because both branches below demand specific content
+            # and the fallthrough refuses. Never copy it into a check that reads an empty
+            # answer as success. Found by AgentGateway; permission refusal is Ultrareach's.
+            answer="$(curl -s "https://pypi.org/pypi/$project/json" || true)"
+            if printf '%s' "$answer" | jq -e '.info.name' >/dev/null; then
               echo "::error::the baseline is '$marker', but PyPI publishes $project." \
                 "The baseline must be recovered from the latest published artifact," \
                 "not from a tag or the working tree. Run: python3 scripts/baseline.py"
               false
+            elif ! printf '%s' "$answer" |
+                jq -e '(.message // "") | ascii_downcase | contains("not found")' >/dev/null; then
+              echo "::error::PyPI did not answer whether it serves $project, so the" \
+                "baseline's claim that nothing is published is unproven. Refusing rather" \
+                "than reading silence as absence."
+              false
             fi
-            echo "$project is on no registry, so '$marker' is the honest baseline."
+            echo "PyPI states it serves no $project, so '$marker' is the honest baseline."
           fi
 
           # Honest about its tier is not the same as ON the right tier. A tag or a
