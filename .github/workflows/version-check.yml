@@ -113,3 +113,24 @@ jobs:
             fi
             echo "$project is on no registry, so '$marker' is the honest baseline."
           fi
+
+          # Honest about its tier is not the same as ON the right tier. A tag or a
+          # release can appear after the baseline was generated, and scripts/baseline.py
+          # ranks pypi-sdist > pypi-wheel > stado > git-archive > head. Ask the generator
+          # which tier is reachable now and refuse a baseline sitting on a weaker one,
+          # otherwise the gate keeps measuring against a superseded artifact. Credit to
+          # Codespy, who hit this as a baseline outranked by a newer tag.
+          #
+          # --stdout, and only the TIER is compared. The committed released-surface.json
+          # is never rewritten here and the regenerated surface is never fed to the
+          # decision: recomputing BOTH sides at check time is the one shape that would
+          # make this gate structurally unable to refuse. Do not "simplify" this into
+          # comparing surfaces.
+          best="$(python3 scripts/baseline.py --stdout | jq -r '.source | split(" ") | first')"
+          if [ "${best%%:*}" != "${marker%%:*}" ]; then
+            echo "::error::the baseline sits on tier '${marker%%:*}' but '${best%%:*}' is" \
+              "reachable now, so the gate is measured against a superseded artifact." \
+              "Run: python3 scripts/baseline.py"
+            false
+          fi
+          echo "Tier '${marker%%:*}' is still the best artifact available."
