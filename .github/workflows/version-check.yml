@@ -72,33 +72,44 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
-          # released-surface.json must describe something a user can actually get. Two
-          # honest states exist and this pins the baseline to whichever one is true: a
-          # version PyPI serves, whose surface came from that version's sdist, or no
-          # release at all, in which case the baseline is HEAD and must say so. A
-          # baseline claiming a release nobody can install makes every later comparison
-          # measure against a thing that does not exist.
+          # released-surface.json must describe something a user can actually get, and
+          # say which kind of artifact it came from. scripts/baseline.py records that as
+          # the first token of "source" -- pypi-sdist:, pypi-wheel:, stado:,
+          # git-archive: or head: -- so this branches on a marker rather than on prose.
+          #
+          # The check runs both ways, because each direction hides a different lie. A
+          # baseline claiming a release the registry does not serve measures every later
+          # comparison against something nobody can install. A baseline claiming to be
+          # unpublished while the project IS on PyPI is worse: it quietly abandons the
+          # real released contract and lets a breaking change look like a first commit.
           project="$(awk -F'"' '/^name *=/{print $2; exit}' pyproject.toml)"
-          claim="sdist published on PyPI"
           released="$(jq -r .version released-surface.json)"
-          source_text="$(jq -r .source released-surface.json)"
+          marker="$(jq -r '.source | split(" ") | first' released-surface.json)"
+          echo "baseline marker: $marker"
 
-          if curl -sSf "https://pypi.org/pypi/$project/$released/json" >/dev/null; then
-            case "$source_text" in
-              "$claim"*) echo "Baseline $released is on PyPI and came from its sdist." ;;
-              *)
-                echo "::error::PyPI serves $project $released, so the baseline must be" \
-                  "recovered from that sdist. Run: python3 scripts/baseline.py"
-                false
-                ;;
-            esac
+          case "$marker" in
+            pypi-sdist:*|pypi-wheel:*) claims_registry=yes ;;
+            stado:*|git-archive:*|head:*) claims_registry=no ;;
+            *)
+              echo "::error::unknown baseline marker '$marker'. The first token of" \
+                ".source must be one of pypi-sdist: pypi-wheel: stado: git-archive: head:"
+              false
+              ;;
+          esac
+
+          if [ "$claims_registry" = yes ]; then
+            if ! curl -sSf "https://pypi.org/pypi/$project/$released/json" >/dev/null; then
+              echo "::error::the baseline claims $project $released is published, but" \
+                "PyPI does not serve it. Run: python3 scripts/baseline.py"
+              false
+            fi
+            echo "Baseline $released is served by PyPI, as its marker claims."
           else
-            case "$source_text" in
-              "$claim"*)
-                echo "::error::released-surface.json claims $released was published, but" \
-                  "PyPI does not serve $project $released. Run: python3 scripts/baseline.py"
-                false
-                ;;
-              *) echo "$project $released is unpublished and the baseline says so." ;;
-            esac
+            if curl -sSf "https://pypi.org/pypi/$project/json" >/dev/null; then
+              echo "::error::the baseline is '$marker', but PyPI publishes $project." \
+                "The baseline must be recovered from the latest published artifact," \
+                "not from a tag or the working tree. Run: python3 scripts/baseline.py"
+              false
+            fi
+            echo "$project is on no registry, so '$marker' is the honest baseline."
           fi

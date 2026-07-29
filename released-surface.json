@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "source": "HEAD at 3a0eef5fa9a50ea908beeedaa913dc3516c93efa. Nothing is published for rej-1b: PyPI has no such version, so the only thing anyone can consume is a git install of the version pyproject.toml declares, and this surface is read from the tree that declares it. Regenerate from the sdist once a release exists.",
+  "source": "head:80ff7d3e5a16f7717ea9d7dadb821ea213d2cf97 -- nothing is published for rej-1b on PyPI and no tag declares a version, so the only thing anyone can consume is a git install of the version pyproject.toml declares, and this surface is read from the tree that declares it. Regenerate once a release or tag exists.",
   "surface": [
     "api:GenerationOutput",
     "api:RejConfig",
