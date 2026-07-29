@@ -1,0 +1,104 @@
+name: Version check
+
+# Refuse a change whose declared version disagrees with what it did to the public
+# contract. The contract of this distribution is what an installer gets: the names the
+# package promises importers through `__all__`, and the console scripts
+# `[project.scripts]` puts on their PATH. Adding one is a capability, removing one
+# breaks whoever imported it yesterday.
+#
+# The rule itself lives in one place for the whole fleet and is not copied here:
+# https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the two
+# things this repository alone knows: its surface, and the version it declares.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the shared rule
+        run: pip install --quiet "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+
+      - name: Read the public surface
+        # No package dependencies: the surface is read out of the source with ast and
+        # tomllib, so this stays cheap and cannot be broken by torch or transformers
+        # moving. A module that does not parse fails the step rather than silently
+        # shrinking the surface.
+        run: python3 scripts/surface.py > "$RUNNER_TEMP/candidate.json"
+
+      - name: Compare against the released contract
+        run: |
+          set -euo pipefail
+          released="$(jq -r .version released-surface.json)"
+          declared="$(awk -F'"' '/^version *=/{print $2; exit}' pyproject.toml)"
+          echo "released: $released"
+          echo "declared: $declared"
+
+          verdict="$(autoversion decide \
+            --current "$released" \
+            --published-surface released-surface.json \
+            --candidate-surface "$RUNNER_TEMP/candidate.json" \
+            --json)"
+          echo "$verdict"
+
+          change="$(printf '%s' "$verdict" | jq -r .change)"
+          required="$(printf '%s' "$verdict" | jq -r .next)"
+
+          if [ "$declared" = "$released" ]; then
+            if [ "$change" != "internal" ]; then
+              echo "::error::The public contract changed ($change) but pyproject.toml still" \
+                "declares the released version $released. The next version must be $required."
+              false
+            fi
+            echo "Nothing released yet and the contract is unchanged."
+          elif [ "$declared" != "$required" ]; then
+            echo "::error::pyproject.toml declares $declared, but a $change change to" \
+              "$released requires $required."
+            false
+          else
+            echo "Declared version matches the $change change."
+          fi
+
+      - name: Refuse a baseline that misdescribes itself
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          # released-surface.json must describe something a user can actually get. Two
+          # honest states exist and this pins the baseline to whichever one is true: a
+          # version PyPI serves, whose surface came from that version's sdist, or no
+          # release at all, in which case the baseline is HEAD and must say so. A
+          # baseline claiming a release nobody can install makes every later comparison
+          # measure against a thing that does not exist.
+          project="$(awk -F'"' '/^name *=/{print $2; exit}' pyproject.toml)"
+          claim="sdist published on PyPI"
+          released="$(jq -r .version released-surface.json)"
+          source_text="$(jq -r .source released-surface.json)"
+
+          if curl -sSf "https://pypi.org/pypi/$project/$released/json" >/dev/null; then
+            case "$source_text" in
+              "$claim"*) echo "Baseline $released is on PyPI and came from its sdist." ;;
+              *)
+                echo "::error::PyPI serves $project $released, so the baseline must be" \
+                  "recovered from that sdist. Run: python3 scripts/baseline.py"
+                false
+                ;;
+            esac
+          else
+            case "$source_text" in
+              "$claim"*)
+                echo "::error::released-surface.json claims $released was published, but" \
+                  "PyPI does not serve $project $released. Run: python3 scripts/baseline.py"
+                false
+                ;;
+              *) echo "$project $released is unpublished and the baseline says so." ;;
+            esac
+          fi
