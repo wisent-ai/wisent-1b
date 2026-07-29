@@ -35,7 +35,47 @@ jobs:
         run: git fetch --force --tags --unshallow || git fetch --force --tags
 
       - name: Install the shared rule
-        run: pip install --quiet "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+        # Into a VIRTUAL ENVIRONMENT, never the system interpreter. A bare
+        # `pip install git+...` is a permanently red gate on a current runner: the
+        # ubuntu-latest image now ships a system python3 carrying the
+        # externally-managed marker, so the install dies with
+        # `error: externally-managed-environment` before a single check runs. A gate
+        # that can never pass certifies exactly as little as one that can never fail.
+        # The venv sidesteps the marker without --break-system-packages, and putting
+        # its bin on GITHUB_PATH keeps every later `autoversion` call unchanged.
+        #
+        # The last block is load-bearing, and what it asserts is IDENTITY, not mere
+        # liveness. `autoversion --help` is satisfied by ANY executable on PATH that
+        # exits zero, so a stray or sabotaged binary answers it and the step goes green
+        # having vouched for a rule nobody consulted -- the fail-open twin of the
+        # "command not found" branch, and the worse of the two because it is silent. So
+        # establish WHICH autoversion is about to answer: it must resolve inside the
+        # venv this step just built, and anything else is named and refused. Measured
+        # both ways by Main -- a stranger first on PATH with an empty venv is refused by
+        # path, the venv prepended ahead of a stranger is accepted.
+        #
+        # `export PATH` is not redundant with the GITHUB_PATH line above it. The runner
+        # reads GITHUB_PATH only AFTER the step exits, so that line serves every LATER
+        # step and never this one. Without the export this assertion resolves whatever
+        # `autoversion` the ambient PATH already holds: nothing at all on a clean
+        # runner, so the step dies "command not found" and the gate is permanently red
+        # -- or a saboteur first on PATH, in which case it exits ZERO because the
+        # saboteur answered and this step vouches for a rule nobody asked. Measured by
+        # FixPyA under `env -i`; a stray autoversion on a workstation hides both.
+        # The mktemp fallbacks let this same body run outside a runner unchanged.
+        run: |
+          : "${RUNNER_TEMP:=$(mktemp -d)}"
+          : "${GITHUB_PATH:=$(mktemp)}"
+          python3 -m venv "$RUNNER_TEMP/rule"
+          "$RUNNER_TEMP/rule/bin/python" -m pip install --quiet \
+            "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+          echo "$RUNNER_TEMP/rule/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/rule/bin:$PATH"
+          resolved="$(command -v autoversion || true)"
+          case "$resolved" in
+            "$RUNNER_TEMP/rule/bin/"*) ;;
+            *) echo "::error::autoversion resolves to '${resolved:-nothing}', outside the venv"; false ;;
+          esac
 
       - name: Read the public surface
         # No package dependencies: the surface is read out of the source with ast and
@@ -43,6 +83,65 @@ jobs:
         # moving. A module that does not parse fails the step rather than silently
         # shrinking the surface.
         run: python3 scripts/surface.py > "$RUNNER_TEMP/candidate.json"
+
+      - name: Prove the gate can refuse
+        # A gate that has never refused is decoration. The install step's identity
+        # guard does not establish otherwise: it settles WHICH binary answers, never
+        # whether its answers are right. Only a step that demands a REFUSAL can catch
+        # a fabricated verdict.
+        #
+        # THREE known answers, not one, and all three built from the COMMITTED
+        # baseline: identical surfaces must read `internal`, one name removed must read
+        # `breaking`, one name added must read `additive`. A single expected answer
+        # cannot do it -- a saboteur that always says `internal` satisfies the install
+        # step and every gate step below, because when declared equals released
+        # `internal` IS the passing branch. Building all three from the frozen file
+        # makes this step prove two more things at once: that the committed file is
+        # well formed, and that it is what actually reaches the decision. Credit
+        # CostTrackerTwo for the pair; removal spelling from SwiftFamily.
+        run: |
+          set -euo pipefail
+          : "${RUNNER_TEMP:=$(mktemp -d)}"
+          released="$(jq -r .version released-surface.json)"
+
+          # `- [(.surface | sort | first)]` drops one name without a bare index, which
+          # this workspace's numeric-literal policy would refuse. Each candidate is
+          # exactly the shape scripts/surface.py emits: a lone "surface" array.
+          jq '{surface: .surface}' released-surface.json > "$RUNNER_TEMP/same.json"
+          jq '{surface: (.surface - [(.surface | sort | first)])}' \
+            released-surface.json > "$RUNNER_TEMP/removed.json"
+          jq '{surface: (.surface + ["autoversion refusal probe"])}' \
+            released-surface.json > "$RUNNER_TEMP/added.json"
+
+          # Into a file, then read: `$(... | jq)` would discard the rule's exit status,
+          # which is the same defect this workflow's staleness step was repaired for.
+          verdict() {
+            autoversion decide --current "$released" \
+              --published-surface released-surface.json \
+              --candidate-surface "$1" --json > "$RUNNER_TEMP/probe.json" || {
+                echo "::error::the rule failed to decide, so whether this gate can" \
+                  "refuse is unproven"; false; }
+            jq -r .change "$RUNNER_TEMP/probe.json"
+          }
+
+          same="$(verdict "$RUNNER_TEMP/same.json")"
+          removed="$(verdict "$RUNNER_TEMP/removed.json")"
+          added="$(verdict "$RUNNER_TEMP/added.json")"
+          echo "identical surfaces -> $same"
+          echo "one name removed   -> $removed"
+          echo "one name added     -> $added"
+
+          [ "$same" = internal ] || {
+            echo "::error::comparing the frozen baseline with itself read '$same', not" \
+              "internal. Either the committed file is malformed, or the thing answering" \
+              "here is not reading it."; false; }
+          [ "$removed" = breaking ] || {
+            echo "::error::removing a name read as '$removed', not breaking. This gate" \
+              "cannot refuse, so every verdict it reports is decoration."; false; }
+          [ "$added" = additive ] || {
+            echo "::error::adding a name read as '$added', not additive. The thing" \
+              "answering here is not the rule this gate is supposed to consult."; false; }
+          echo "The rule answers internal, breaking and additive as it must."
 
       - name: Compare against the released contract
         run: |
@@ -183,7 +282,25 @@ jobs:
           # surface never reaches the decision: recomputing BOTH sides at check time is
           # the one shape that would make this gate structurally unable to refuse. Do not
           # "simplify" this into comparing surfaces.
-          best="$(python3 scripts/baseline.py --stdout | jq -r '.source | split(" ") | first')"
+          #
+          # Run the generator into a FILE and test its status explicitly. Inside a
+          # command substitution containing a pipeline the generator's exit status is
+          # discarded -- the substitution reports jq's status -- and `set -e` does not
+          # reach inside one. So a dead generator used to yield an empty `best` and this
+          # step blamed the wrong thing; worse, if the committed marker ever also read
+          # empty it compared "" against "" and passed VACUOUSLY. Both markers are now
+          # asserted non-empty before they are compared.
+          python3 scripts/baseline.py --stdout > "$RUNNER_TEMP/best.json" || {
+            echo "::error::the baseline generator failed, so the best reachable tier is unknown"; false; }
+          best="$(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/best.json")"
+          # Both spellings of "empty" are rejected. `jq -r` renders an absent marker as
+          # the literal string "null" -- measured: `"" | split(" ") | first` is null at
+          # exit zero -- and `-n` reads that four-character string as non-empty, so
+          # testing for the empty string alone leaves standing exactly the vacuous
+          # comparison this guard exists to refuse: "null" against "null", equal, green.
+          [ -n "$best" ] && [ -n "$marker" ] &&
+            [ "$best" != null ] && [ "$marker" != null ] || {
+              echo "::error::a marker read empty, so this comparison would be vacuous"; false; }
           if [ "${marker%%:*}" = head ]; then
             # head:<sha> moves with every commit, so only the tier is comparable. Full
             # equality would demand regenerating the baseline in every commit that
