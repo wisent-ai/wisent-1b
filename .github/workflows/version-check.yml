@@ -92,6 +92,16 @@ jobs:
           # unpublished while the project IS on PyPI is worse: it quietly abandons the
           # real released contract and lets a breaking change look like a first commit.
           project="$(awk -F'"' '/^name *=/{print $2; exit}' pyproject.toml)"
+          if [ -z "$project" ]; then
+            # PyPI's absence answer is generic -- it does not name what it was asked
+            # about -- so a lookup of the wrong or empty name reads as proven absence.
+            # An empty name currently returns HTML and so refuses below, but relying on
+            # that is relying on a redirect. Refuse on the repository fact instead, which
+            # no registry behaviour can change. Naming asymmetry found by HooksRotator.
+            echo "::error::could not read the distribution name from pyproject.toml, so" \
+              "there is nothing to ask PyPI about. Did [project] name move or go dynamic?"
+            false
+          fi
           released="$(jq -r .version released-surface.json)"
           marker="$(jq -r '.source | split(" ") | first' released-surface.json)"
           echo "baseline marker: $marker"
@@ -129,6 +139,22 @@ jobs:
             # `|| true` is safe ONLY because both branches below demand specific content
             # and the fallthrough refuses. Never copy it into a check that reads an empty
             # answer as success. Found by AgentGateway; permission refusal is Ultrareach's.
+            #
+            # The control below is NOT here for reachability -- the content check already
+            # covers that, since an unreachable index yields no answer to read. It is here
+            # because "unproven" is also what a BROKEN EXPRESSION produces: a jq path that
+            # cannot recognise a published project refuses forever while the registry
+            # answers perfectly, and the operator blames PyPI. Asserting the positive
+            # branch against a project that certainly exists makes that failure loud and
+            # correctly attributed. AdamMonitor hit it twice writing this check by hand;
+            # PatentCli found jq and jaq disagree on absent keys, which is how a spelling
+            # that works locally can behave differently on the runner.
+            if ! curl -s "https://pypi.org/pypi/pip/json" | jq -e '.info.name' >/dev/null; then
+              echo "::error::this step cannot recognise a project PyPI definitely serves," \
+                "so its verdict about $project would be meaningless. The check itself is" \
+                "broken -- not the registry, and not the baseline."
+              false
+            fi
             answer="$(curl -s "https://pypi.org/pypi/$project/json" || true)"
             if printf '%s' "$answer" | jq -e '.info.name' >/dev/null; then
               echo "::error::the baseline is '$marker', but PyPI publishes $project." \

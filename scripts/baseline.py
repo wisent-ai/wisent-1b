@@ -101,7 +101,16 @@ def version_key(version: str) -> tuple:
 
 
 def ask_pypi(path: str) -> dict | None:
-    """PyPI's JSON at `path`, or None when it has no such thing."""
+    """PyPI's JSON at `path`, or None when the index STATES it has no such thing.
+
+    Only a not-found answer returns None. Every other outcome -- a refusal, a throttle,
+    a server error, an unreachable host, or a success carrying something that is not the
+    JSON document asked for -- means the question was not answered, and is refused rather
+    than folded into "not published". Those are the cases that would otherwise let a
+    published project read as absent, which is the one mistake this whole file exists to
+    avoid. Each failure says which kind it is, because an unannotated traceback in a red
+    build reads as an unrelated fault and invites a rerun until it passes.
+    """
     try:
         with urllib.request.urlopen(f"{INDEX}/{path}/json") as response:
             return json.load(response)
@@ -109,13 +118,19 @@ def ask_pypi(path: str) -> dict | None:
         if error.code == http.HTTPStatus.NOT_FOUND:
             return None
         raise SystemExit(
-            f"PyPI answered {error.code} for {path}, so whether it is published is "
-            "unknown and a baseline must not be guessed"
+            f"PyPI answered {error.code} for {path}. That is a refusal, a throttle or a "
+            "server fault -- not a statement about whether it is published -- so a "
+            "baseline must not be guessed from it"
         ) from error
     except urllib.error.URLError as error:
         raise SystemExit(
-            f"cannot reach PyPI to establish what is published, and a baseline must not "
-            f"be guessed: {error}"
+            f"cannot reach PyPI to establish what is published. This is a transport "
+            f"failure, not evidence about {path}: {error}"
+        ) from error
+    except json.JSONDecodeError as error:
+        raise SystemExit(
+            f"PyPI answered for {path} with something that is not JSON, which is what a "
+            f"throttle or an error page looks like on a successful request: {error}"
         ) from error
 
 
