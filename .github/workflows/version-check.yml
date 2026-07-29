@@ -25,6 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Make tags and history visible
+        # actions/checkout fetches one commit and no tags. Without this the tier check
+        # below would run `git tag --list` against a repository that has none, conclude
+        # head: is still the best artifact, and pass -- blind to the exact tag it exists
+        # to notice. A shallow clone would also break `git archive <tag>`, since the
+        # tag's tree would not be present. --unshallow fails on an already complete
+        # repository, hence the fallback. Trap found by Codespy.
+        run: git fetch --force --tags --unshallow || git fetch --force --tags
+
       - name: Install the shared rule
         run: pip install --quiet "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
 
