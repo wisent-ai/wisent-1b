@@ -121,16 +121,30 @@ jobs:
           # otherwise the gate keeps measuring against a superseded artifact. Credit to
           # Codespy, who hit this as a baseline outranked by a newer tag.
           #
-          # --stdout, and only the TIER is compared. The committed released-surface.json
-          # is never rewritten here and the regenerated surface is never fed to the
-          # decision: recomputing BOTH sides at check time is the one shape that would
-          # make this gate structurally unable to refuse. Do not "simplify" this into
-          # comparing surfaces.
+          # --stdout, and only the ARTIFACT IDENTITY is compared, never the surface. The
+          # committed released-surface.json is never rewritten here and the regenerated
+          # surface never reaches the decision: recomputing BOTH sides at check time is
+          # the one shape that would make this gate structurally unable to refuse. Do not
+          # "simplify" this into comparing surfaces.
           best="$(python3 scripts/baseline.py --stdout | jq -r '.source | split(" ") | first')"
-          if [ "${best%%:*}" != "${marker%%:*}" ]; then
-            echo "::error::the baseline sits on tier '${marker%%:*}' but '${best%%:*}' is" \
+          if [ "${marker%%:*}" = head ]; then
+            # head:<sha> moves with every commit, so only the tier is comparable. Full
+            # equality would demand regenerating the baseline in every commit that
+            # touches anything -- an infinite ratchet, not a gate.
+            want="${best%%:*}"
+            have="${marker%%:*}"
+          else
+            # Every other tier names its artifact exactly, by filename or by tag, and
+            # those do not move. Comparing the whole marker also catches a baseline
+            # superseded WITHIN its tier -- an older sdist, or a tag outranked by a
+            # newer one -- which a tier-prefix comparison passes straight through.
+            want="$best"
+            have="$marker"
+          fi
+          if [ "$want" != "$have" ]; then
+            echo "::error::the baseline is '$have' but '$want' is the best artifact" \
               "reachable now, so the gate is measured against a superseded artifact." \
               "Run: python3 scripts/baseline.py"
             false
           fi
-          echo "Tier '${marker%%:*}' is still the best artifact available."
+          echo "Baseline '$have' is still the best artifact available."
