@@ -34,6 +34,10 @@ import tomllib
 import urllib.error
 import urllib.request
 
+# The extractor is a sibling script, not an installed module. Importing it would leave
+# a scripts/__pycache__ behind, and this repository has no .gitignore to absorb it.
+sys.dont_write_bytecode = True
+
 import surface as extractor
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
