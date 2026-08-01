@@ -1,5 +1,14 @@
 # Rej-1B
 
+<!-- wisent-readme-signals:start -->
+[![CI](https://github.com/wisent-ai/wisent-1b/actions/workflows/version-check.yml/badge.svg?branch=main)](https://github.com/wisent-ai/wisent-1b/actions/workflows/version-check.yml)
+[![Release](https://img.shields.io/github/v/release/wisent-ai/wisent-1b?display_name=tag&sort=semver)](https://github.com/wisent-ai/wisent-1b/releases)
+[![Downloads](https://img.shields.io/github/downloads/wisent-ai/wisent-1b/total)](https://github.com/wisent-ai/wisent-1b/releases)
+[![License](https://img.shields.io/github/license/wisent-ai/wisent-1b)](https://github.com/wisent-ai/wisent-1b)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Wisent-5865F2?logo=discord&logoColor=white)](https://discord.gg/qRjpkthq54)
+<!-- wisent-readme-signals:end -->
+
+
 A reference implementation of **Rej-1B**, a Representation-Native Language Model (RNM) with an explicit concept stream.
 
 > **Key idea:** concepts are not a post-hoc decomposition of hidden states; they are a separate computational state that reads from tokens, updates itself across layers, and writes back into generation.
