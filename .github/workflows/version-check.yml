@@ -26,12 +26,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Make tags and history visible
-        # actions/checkout fetches one commit and no tags. Without this the tier check
-        # below would run `git tag --list` against a repository that has none, conclude
-        # head: is still the best artifact, and pass -- blind to the exact tag it exists
-        # to notice. A shallow clone would also break `git archive <tag>`, since the
-        # tag's tree would not be present. --unshallow fails on an already complete
-        # repository, hence the fallback. Trap found by Codespy.
+        # actions/checkout fetches one commit and no tags. The tier check below runs
+        # scripts/baseline.py, which asks ORIGIN which tags exist -- `git ls-remote
+        # --tags origin`, never this working copy -- so it can no longer conclude
+        # head: is the best artifact while the remote holds a tag, and it cannot take
+        # a fork's inherited tags for ours either. That does not make this step
+        # optional; it changes what the step prevents. Once the remote NAMES a tag
+        # the generator has to READ it: `git archive <tag>` needs that tag's object
+        # and tree present here, and a tag origin serves that this clone cannot
+        # resolve is a hard refusal, never a skip -- skipping it is how a superseded
+        # baseline gets certified as current. So without this fetch the gate is RED
+        # rather than asleep, and right to be. Unshallowing is the same requirement
+        # for the tree: a shallow clone simply lacks it. --unshallow fails on an
+        # already complete repository, hence the fallback. Trap found by Codespy.
         run: git fetch --force --tags --unshallow || git fetch --force --tags
 
       - name: Install the shared rule

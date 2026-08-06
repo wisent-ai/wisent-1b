@@ -68,6 +68,13 @@ ARCHIVE = "git-archive"
 HEAD = "head"
 REGISTRY_MARKERS = (SDIST, WHEEL)
 
+# The tag question is asked of ORIGIN, never of the working copy. `git ls-remote` spells
+# a tag ref this way and lists an ANNOTATED tag a second time under the peel suffix,
+# that second line naming the commit the tag points at.
+REMOTE = "origin"
+TAG_REF_PREFIX = "refs/tags/"
+PEELED_SUFFIX = "^{}"
+
 
 def run(*command: str) -> str:
     """A git command's output, or a loud failure."""
@@ -192,14 +199,82 @@ def from_registry(name: str) -> dict | None:
         }
 
 
+def remote_tags() -> dict:
+    """Every tag ORIGIN serves, mapped to the object ids it serves for that tag.
+
+    Never `git tag --list`, which is wrong in two opposite directions. On a runner
+    `actions/checkout@v4` fetches no tags at all, so a local listing comes back empty
+    however many the remote holds -- and this generator would then call `head:` the best
+    reachable tier at exactly the moment a tag made that false, blind to the one thing
+    the workflow re-runs it with `--stdout` to notice. In a fork the error inverts: a
+    fork shares the upstream's object store, so a locally visible tag can be the
+    upstream's, and filing its surface here would claim a release nobody made in this
+    repository. `git ls-remote` asks the only party that knows which tags are ours.
+
+    An annotated tag arrives as two lines -- the tag object, and the commit it peels to
+    under `<ref>^{}` -- so both ids are collected under the one name, and the local
+    commit has to match one of them.
+    """
+    served: dict = {}
+    for line in run("ls-remote", "--tags", REMOTE).splitlines():
+        fields = line.split()
+        if len(fields) != len(("object", "ref")):
+            continue
+        object_id, ref = fields
+        if not ref.startswith(TAG_REF_PREFIX):
+            continue
+        name = ref[len(TAG_REF_PREFIX) :].removesuffix(PEELED_SUFFIX)
+        if name:
+            served.setdefault(name, set()).add(object_id)
+    return served
+
+
+def assert_tag_is_readable_here(tag: str, objects: set) -> None:
+    """A tag ORIGIN serves must exist in this clone, and be the same object.
+
+    Neither half may degrade to a skip. A remote tag this clone never fetched cannot be
+    reproduced with `git archive`, and passing over it would restore exactly the
+    blindness `remote_tags` exists to remove: a `head:` baseline reported while the
+    remote holds a tag. A shallow clone fails the same way for a different reason -- the
+    tag's tree is simply absent. And a local tag naming a different commit than the
+    remote's is not the artifact anybody resolved, so its surface is not the published
+    one.
+    """
+    if run("rev-parse", "--is-shallow-repository") == "true":
+        raise SystemExit(
+            f"{REMOTE} serves tag {tag}, but this clone is shallow, so that tag's tree "
+            f"is absent and `git archive {tag}` cannot reproduce it. Reporting a lower "
+            f"tier from here would be blindness rather than a finding; run: "
+            f"git fetch --force --tags --unshallow"
+        )
+    try:
+        local = run("rev-parse", f"{tag}^{{commit}}")
+    except SystemExit as error:
+        raise SystemExit(
+            f"{REMOTE} serves tag {tag}, but this clone cannot resolve it ({error}). "
+            f"Skipping it would report a weaker baseline than the remote can prove; "
+            f"run: git fetch --force --tags"
+        ) from error
+    if local not in objects:
+        raise SystemExit(
+            f"tag {tag} is {local} here, but {REMOTE} serves {sorted(objects)} for it. "
+            f"Refusing to build a baseline from a tag whose identity is unsettled: a tag "
+            f"names an artifact only if the remote and this clone agree what it is."
+        )
+
+
 def from_tag() -> dict | None:
-    """The highest tag whose tree declares the version its name claims."""
-    tags = [tag for tag in run("tag", "--list").splitlines() if tag.strip()]
-    if not tags:
+    """The highest tag ORIGIN serves whose tree declares the version its name claims.
+
+    The candidates come from the remote, never from `git tag --list`: see `remote_tags`.
+    """
+    served = remote_tags()
+    if not served:
         return None
 
     usable, mismatched = [], []
-    for tag in tags:
+    for tag, objects in served.items():
+        assert_tag_is_readable_here(tag, objects)
         claimed = tag.lstrip("v")
         with tempfile.TemporaryDirectory() as work:
             tree = pathlib.Path(work)
