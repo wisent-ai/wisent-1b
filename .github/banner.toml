@@ -1,0 +1,15 @@
+[automation]
+managed = true
+source_fingerprint = "a2524ed1f1fcbdda"
+category = "model"
+
+[banner]
+title = "Language modeling with an explicit concept stream."
+description = "Reference implementation of Rej-1B, a representation-native language model."
+product = "Wisent"
+url = "wisent.ai"
+theme = "dark"
+layout = "latent-field-left"
+art_seed = "wisent-1b"
+width = 1584
+height = 396
