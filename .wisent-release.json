@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "product": "wisent-1b",
+  "releases": false,
+  "reason": "The released-surface baseline states that no PyPI project or release tag exists; the only consumable form is a development source checkout."
+}
