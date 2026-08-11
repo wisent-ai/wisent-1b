@@ -10,7 +10,16 @@
 
 # Rej-1B
 
-A reference implementation of **Rej-1B**, a Representation-Native Language Model (RNM) with an explicit concept stream.
+A Concept-First Model That Is Interpretable and Steerable by Design.
+
+Machine learning interpretability tries to untangle computations present after
+training but struggles due to superposition, concept entanglement and
+steerability misidentification. The Rej family of models uses concepts as a
+separate element of the model architecture. It reads from tokens, updates itself
+over layers and activations and writes back into the generation stream. Every
+token can be assigned a specific score and be manipulated into desired states.
+
+Representation-Native Models. Designed for Human Control.
 
 > **Key idea:** concepts are not a post-hoc decomposition of hidden states; they are a separate computational state that reads from tokens, updates itself across layers, and writes back into generation.
 
