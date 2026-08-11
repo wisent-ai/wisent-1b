@@ -10,7 +10,7 @@
 
 # Rej-1B
 
-A Concept-First Model That Is Interpretable and Steerable by Design.
+A Concept-First Model. Interpretable and Steerable by Design.
 
 Machine learning interpretability tries to untangle computations present after
 training but struggles due to superposition, concept entanglement and
