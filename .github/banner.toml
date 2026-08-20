@@ -1,13 +1,13 @@
 [automation]
 managed = true
-source_fingerprint = "a2524ed1f1fcbdda"
+source_fingerprint = "784de650403656db"
 category = "model"
 
 [banner]
 title = "Language modeling with an explicit concept stream."
 description = "Reference implementation of Rej-1B, a representation-native language model."
 product = "Wisent"
-url = "wisent.ai"
+url = "wisent.com"
 theme = "dark"
 layout = "latent-field-left"
 art_seed = "wisent-1b"
