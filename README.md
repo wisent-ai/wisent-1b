@@ -4,6 +4,8 @@ A reference implementation of **Rej-1B**, a Representation-Native Language Model
 
 > **Key idea:** concepts are not a post-hoc decomposition of hidden states; they are a separate computational state that reads from tokens, updates itself across layers, and writes back into generation.
 
+Documentation: [Rej-1B model architecture and runtime](https://wisent.com/docs/models/wisent-1b)
+
 ## What's inside
 
 - `rej_1b/model.py` — `RejRNM` and `RejLayer` implementing the dual-stream architecture.
