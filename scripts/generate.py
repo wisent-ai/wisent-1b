@@ -41,6 +41,13 @@ def main():
     if controls:
         print(f"Applying controls: {json.dumps(controls, indent=2)}")
 
+    # Decoding semantics differ between the two, so the run says which one it
+    # is: with the carry the concept state a step ends on is part of the state
+    # the next step starts from, without it every step rebuilds the stream from
+    # the learned concept embeddings.
+    if getattr(model.config, "carry_concept_state", False):
+        print("Cross-step concept carry: on")
+
     output = generate(
         model=model,
         tokenizer=tokenizer,

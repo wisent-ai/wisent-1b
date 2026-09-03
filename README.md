@@ -41,7 +41,7 @@ Documentation: [Rej-1B model architecture and runtime](https://wisent.com/docs/m
 ## Install
 
 ```bash
-cd rej-1b
+cd wisent-1b
 pip install -e .
 ```
 
@@ -199,6 +199,23 @@ python scripts/train.py \
   --batch_size 8 \
   --seq_length 512
 ```
+
+Add the cross-step concept carry by setting `carry_concept_state` in the config
+JSON. `--carry_passes` then defaults to 2 and `--carry_fraction` to 0.25, and
+the run prints the schedule it chose:
+
+```bash
+python scripts/train.py \
+  --config configs/rej_1b.json \
+  --data corpus.txt \
+  --output_dir checkpoints \
+  --carry_passes 2 \
+  --carry_fraction 0.25
+```
+
+`--carry_passes 1` with the flag set is refused rather than run: the fusion
+would never be called and never receive gradient, so the model would carry a
+module it cannot learn.
 
 ### Controlled generation
 
