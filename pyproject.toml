@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rej-1b"
-version = "0.1.0"
+version = "0.2.0"
 description = "Rej-1B: A Representation-Native Language Model with Explicit Concept Control"
 readme = "README.md"
 requires-python = ">=3.9"
