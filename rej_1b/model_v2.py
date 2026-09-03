@@ -364,6 +364,18 @@ class RejRNMv2(nn.Module):
 
     def __init__(self, config: RejConfigV2):
         super().__init__()
+        # RejConfigV2 inherits carry_concept_state from RejConfig, and v2 does
+        # not implement it: its concept state is a Gaussian over subspace
+        # coordinates, so carrying it across steps is a distribution to
+        # propagate rather than a vector to fuse. Refusing is the honest
+        # answer; accepting the flag and dropping it would report a carried
+        # model that carries nothing.
+        if getattr(config, "carry_concept_state", False):
+            raise NotImplementedError(
+                "carry_concept_state is implemented for RejRNM, not RejRNMv2; "
+                "v2 carries a probabilistic concept state and needs its own "
+                "fusion rule"
+            )
         self.config = config
 
         self.token_embeddings = nn.Embedding(config.vocab_size, config.d_model)

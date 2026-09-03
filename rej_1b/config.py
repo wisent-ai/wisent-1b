@@ -49,6 +49,15 @@ class RejConfig:
     )
     concept_dropout: float = 0.0
 
+    # Cross-step concept state. With this off, the concept stream is rebuilt
+    # from the learned concept embeddings at every decoding step, so the state
+    # the stream computes at step t reaches step t+1 through nothing but the
+    # sampled token. With it on, the final concept state of a step is fused
+    # into the initial state of the next one through a gate whose value
+    # projection starts at zero, so enabling the flag on a checkpoint that
+    # never trained the carry changes no output.
+    carry_concept_state: bool = False
+
     # Normalization and initialization
     layer_norm_eps: float = 1e-5
     initializer_range: float = 0.02

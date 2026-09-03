@@ -94,6 +94,12 @@ def generate(
 
     concept_trace_layers: List[torch.Tensor] = []
 
+    # The concept stream is rebuilt from the learned embeddings on every step
+    # unless the model was built to carry it, in which case the state one step
+    # ends on becomes part of the state the next one starts from.
+    carry = model.config.carry_concept_state
+    carried_state: Optional[torch.Tensor] = None
+
     with torch.no_grad():
         for _ in range(max_new_tokens):
             inp = torch.tensor([generated[-model.config.max_position_embeddings:]], device=device)
@@ -101,8 +107,12 @@ def generate(
                 inp,
                 controls=controls_t,
                 return_concept_trace=return_concept_trace,
+                concept_state=carried_state,
+                return_concept_state=carry,
             )
             logits = outputs["logits"]
+            if carry:
+                carried_state = outputs["concept_state"]
             if return_concept_trace and outputs["concept_trace"] is not None:
                 concept_trace_layers.append(outputs["concept_trace"][-1])
 

@@ -239,6 +239,49 @@ class RejLayer(nn.Module):
         return tokens, concepts
 
 
+class ConceptCarry(nn.Module):
+    """Gated fusion of the previous step's concept state into the next step's.
+
+    The concept stream is a state over depth: it is built once from the learned
+    concept embeddings, updated layer by layer, and then discarded. Across
+    decoding steps nothing survives it but the sampled token, so a `K x
+    d_concept` state the model has just paid to compute is thrown away at every
+    step boundary. That is the same channel a standard transformer leaves
+    narrow, and depth recurrence alone cannot stand in for it: to realize an
+    update of the form `c(t+1) = f(c(t), x(t))` the state has to reach the next
+    step, not merely a deeper layer of this one.
+
+    The fusion is a gated linear unit over the pair `(initial, carried)`. The
+    value projection is zero-initialized, so the carry contributes exactly
+    nothing until it is trained: a checkpoint written before this module
+    existed produces identical logits with the flag turned on. The gate is not
+    zero-initialized, so it receives gradient as soon as the value projection
+    moves off zero.
+    """
+
+    def __init__(self, d_concept: int):
+        super().__init__()
+        self.value = nn.Linear(2 * d_concept, d_concept)
+        self.gate = nn.Linear(2 * d_concept, d_concept)
+        nn.init.zeros_(self.value.weight)
+        nn.init.zeros_(self.value.bias)
+        nn.init.xavier_uniform_(self.gate.weight)
+        nn.init.zeros_(self.gate.bias)
+
+    def forward(self, initial: torch.Tensor, carried: torch.Tensor) -> torch.Tensor:
+        """Fuse a carried concept state into an initial one.
+
+        Args:
+            initial: (B, K, d_concept) state built for this step.
+            carried: (B, K, d_concept) final state of the previous step.
+
+        Returns:
+            (B, K, d_concept) fused initial state.
+        """
+        pair = torch.cat([initial, carried], dim=-1)
+        return initial + torch.sigmoid(self.gate(pair)) * self.value(pair)
+
+
 class RejRNM(nn.Module):
     """Rej Representation-Native Model."""
 
@@ -264,6 +307,10 @@ class RejRNM(nn.Module):
         )
 
         self.layers = nn.ModuleList([RejLayer(config) for _ in range(config.n_layers)])
+
+        self.concept_carry = (
+            ConceptCarry(config.d_concept) if config.carry_concept_state else None
+        )
 
         self.token_ln = nn.LayerNorm(config.d_model, eps=config.layer_norm_eps)
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
@@ -329,6 +376,8 @@ class RejRNM(nn.Module):
         input_ids: torch.Tensor,
         controls: Optional[torch.Tensor] = None,
         return_concept_trace: bool = False,
+        concept_state: Optional[torch.Tensor] = None,
+        return_concept_state: bool = False,
     ) -> dict:
         """Forward pass.
 
@@ -336,11 +385,17 @@ class RejRNM(nn.Module):
             input_ids: (B, T) token indices.
             controls: (B, n_named_concepts) scalar controls, or None.
             return_concept_trace: if True, collect and return concept states per layer.
+            concept_state: (B, K, d_concept) final concept state of a previous
+                step, fused into this step's initial state. Requires
+                `carry_concept_state` on the config.
+            return_concept_state: if True, return the final concept state so a
+                caller can pass it to the next step.
 
         Returns:
             dict with keys:
                 "logits": (B, T, vocab_size)
                 "concept_trace": list of (B, K, d_concept) tensors if requested, else None
+                "concept_state": (B, K, d_concept) final state if requested, else None
         """
         B, T = input_ids.shape
         device = input_ids.device
@@ -360,6 +415,23 @@ class RejRNM(nn.Module):
         # Build initial concept state, applying named concept controls.
         concepts = self._build_initial_concepts(controls, B, device)
 
+        # Fuse in the state the previous step ended on. Refusing an unusable
+        # argument here rather than ignoring it: a caller that threads a state
+        # through a model built without the carry would otherwise get the
+        # no-carry behavior and no way to notice.
+        if concept_state is not None:
+            if self.concept_carry is None:
+                raise ValueError(
+                    "concept_state was passed but this model was built with "
+                    "carry_concept_state=False, so it has no carry module"
+                )
+            expected = (B, self.config.n_concepts, self.config.d_concept)
+            if tuple(concept_state.shape) != expected:
+                raise ValueError(
+                    f"concept_state shape {tuple(concept_state.shape)} must be {expected}"
+                )
+            concepts = self.concept_carry(concepts, concept_state.to(device))
+
         concept_trace = [] if return_concept_trace else None
 
         for layer in self.layers:
@@ -373,6 +445,7 @@ class RejRNM(nn.Module):
         return {
             "logits": logits,
             "concept_trace": concept_trace,
+            "concept_state": concepts if return_concept_state else None,
         }
 
     def count_parameters(self) -> int:

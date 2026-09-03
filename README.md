@@ -93,6 +93,48 @@ Controls are applied in two ways:
 
 This dual-path design keeps training stable while preserving the representation-native concept stream.
 
+### Cross-step concept state
+
+The block above carries the concept state across **depth**. Across generation
+**steps** it carries nothing: `_build_initial_concepts` rebuilds the stream from
+the learned concept embeddings on every step, so a `K x d_concept` state the
+model has just computed is discarded at the step boundary and only the sampled
+token survives it. A state that advances one layer per update is a deeper
+feedforward computation, not a state that tracks anything over time.
+
+`carry_concept_state` closes that channel. The final concept state of a step is
+fused into the initial state of the next one by a gated linear unit over the
+pair:
+
+```
+c_0(t+1) = c_init(t+1) + sigmoid(W_g [c_init, c_L(t)]) * W_v [c_init, c_L(t)]
+```
+
+`W_v` is zero-initialized, so the carry contributes exactly nothing until it is
+trained: turning the flag on for a checkpoint written without it changes no
+logit. Verified on the tiny config — carried and uncarried forward passes agree
+to 0.0 at initialization, and diverge once `W_v` is non-zero and the per-layer
+`concept_to_token_gate` is open.
+
+```python
+from rej_1b.config import RejConfig, rej_tiny_config
+
+cfg = RejConfig.from_dict({**rej_tiny_config().to_dict(), "carry_concept_state": True})
+```
+
+`generate` threads the state through the decoding loop by itself when the flag
+is set. Training needs one extra thing: teacher forcing runs a whole sequence in
+one parallel pass, so nothing in an ordinary step is a *previous* step and the
+fusion never fires — its gradient is `None`. `train_step(..., carry_passes=2)`
+runs the batch again with the state the first pass ended on, which is what puts
+the fusion on the gradient path, and `train(..., carry_passes=2,
+carry_fraction=0.25)` mixes those steps in one in four rather than paying for a
+second forward and backward on every step.
+
+The carried state is detached between passes. `RejRNMv2` refuses the flag rather
+than ignoring it: its concept state is a Gaussian over subspace coordinates, so
+carrying it is a distribution to propagate and needs its own fusion rule.
+
 ## RejRNMv2: geometric concepts (advanced)
 
 `RejRNMv2` bakes geometry into the architecture itself, rather than applying scalar steering after training:
