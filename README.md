@@ -84,6 +84,17 @@ tokens  ← tokens + gate * CrossAttn(tokens → concepts)
 tokens  ← tokens + TokenFFN(tokens)
 ```
 
+`gate` on the write-back line is `concept_to_token_gate`, one scalar per layer,
+**initialized to zero**. The token stream therefore starts as a standard
+transformer and the gate grows only if the concept stream helps prediction.
+
+That has a consequence worth knowing before measuring anything: on a freshly
+constructed model the concept stream cannot reach the token stream at all, so
+**no concept intervention changes any output**. Setting `truthfulness=+2.0` on
+an untrained `RejRNM` and reading identical logits is the gate at zero, not a
+broken control plane. Controllability is measurable once training has opened
+the gates, which is why `scripts/demo_toy.py` trains before it steers.
+
 The first `n_named_concepts` slots are exposed as the named control plane, e.g. `truthfulness`, `uncertainty`, `refusal`, `code_mode`. The remaining slots are latent concept dimensions.
 
 Controls are applied in two ways:
