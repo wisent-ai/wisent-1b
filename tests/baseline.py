@@ -1,0 +1,354 @@
+"""Write `released-surface.json`: the surface of the best artifact anyone can actually get.
+
+The baseline the shared versioning rule compares against must describe a real artifact,
+not whichever working tree someone happened to have checked out. So this reaches for the
+best available source, in the fleet's order of preference:
+
+    pypi-sdist  >  pypi-wheel  >  stado  >  git-archive  >  head
+
+and records which one it used as the first token of `source`. That token is a marker the
+version-check workflow reads back, so the two files are coupled by a constant rather
+than by prose:
+
+    pypi-sdist:<filename>   recovered from a published sdist
+    pypi-wheel:<filename>   recovered from a published pure-Python wheel
+    stado:<object>          recovered from a published Stado channel artifact
+    git-archive:<tag>       reproduced from a git tag
+    head:<sha>              last resort: nothing published, no usable tag
+
+Two rules keep the baseline honest.
+
+The version recorded is the LATEST PUBLISHED one, never the version `pyproject.toml`
+declares. Looking up only the declared version means that the moment someone bumps ahead
+of a release the lookup 404s, the generator quietly falls back to HEAD, and every later
+comparison is measured against something nobody released.
+
+A tag is trusted only if the tree it points at declares the version its name claims. A
+tag that says one version while its own `pyproject.toml` says another is reported and
+skipped, because reproducing it would put a surface under a version that never had it.
+
+It never guesses. If a registry is unreachable, or the only published artifact is of a
+kind this script cannot read, it fails and says what to do instead of silently dropping
+to a weaker tier.
+
+Usage:
+    python3 tests/baseline.py            # rewrite released-surface.json
+    python3 tests/baseline.py --stdout   # print it instead
+"""
+
+from __future__ import annotations
+
+import http
+import json
+import pathlib
+import subprocess
+import sys
+import tarfile
+import tempfile
+import tomllib
+import urllib.error
+import urllib.request
+
+# The extractor is a sibling module. Avoiding bytecode keeps a read-only checkout
+# unchanged and does not require an ignore rule for tests/__pycache__.
+sys.dont_write_bytecode = True
+
+import surface as extractor
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+BASELINE = ROOT / "released-surface.json"
+INDEX = "https://pypi.org/pypi"
+
+# Markers. The workflow branches on these, so they are constants here and referenced by
+# name, never retyped as prose. `REGISTRY_MARKERS` is the set that asserts "a registry
+# serves this exact version"; anything else asserts the opposite.
+SDIST = "pypi-sdist"
+WHEEL = "pypi-wheel"
+ARCHIVE = "git-archive"
+HEAD = "head"
+REGISTRY_MARKERS = (SDIST, WHEEL)
+
+# The tag question is asked of ORIGIN, never of the working copy. `git ls-remote` spells
+# a tag ref this way and lists an ANNOTATED tag a second time under the peel suffix,
+# that second line naming the commit the tag points at.
+REMOTE = "origin"
+TAG_REF_PREFIX = "refs/tags/"
+PEELED_SUFFIX = "^{}"
+
+
+def run(*command: str) -> str:
+    """A git command's output, or a loud failure."""
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), *command], capture_output=True, text=True, check=False
+    )
+    if result.returncode:
+        raise SystemExit(f"git {' '.join(command)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def declared(manifest: pathlib.Path) -> tuple:
+    """The distribution name and version a `pyproject.toml` declares."""
+    metadata = tomllib.loads(manifest.read_text())
+    project = metadata.get("project", {})
+    name, version = project.get("name"), project.get("version")
+    if not isinstance(name, str) or not isinstance(version, str):
+        raise SystemExit(
+            f"{manifest} declares no static [project] name and version, so there is no "
+            "declared version to build a baseline around"
+        )
+    return name, version
+
+
+def version_key(version: str) -> tuple:
+    """Order versions without pulling in a parser: numeric parts numerically."""
+    pieces = []
+    for piece in version.split("."):
+        pieces.append((int(False), int(piece)) if piece.isdigit() else (int(True), piece))
+    return tuple(pieces)
+
+
+def ask_pypi(path: str) -> dict | None:
+    """PyPI's JSON at `path`, or None when the index STATES it has no such thing.
+
+    Only a not-found answer returns None. Every other outcome -- a refusal, a throttle,
+    a server error, an unreachable host, or a success carrying something that is not the
+    JSON document asked for -- means the question was not answered, and is refused rather
+    than folded into "not published". Those are the cases that would otherwise let a
+    published project read as absent, which is the one mistake this whole file exists to
+    avoid. Each failure says which kind it is, because an unannotated traceback in a red
+    build reads as an unrelated fault and invites a rerun until it passes.
+    """
+    try:
+        with urllib.request.urlopen(f"{INDEX}/{path}/json") as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code == http.HTTPStatus.NOT_FOUND:
+            return None
+        raise SystemExit(
+            f"PyPI answered {error.code} for {path}. That is a refusal, a throttle or a "
+            "server fault -- not a statement about whether it is published -- so a "
+            "baseline must not be guessed from it"
+        ) from error
+    except urllib.error.URLError as error:
+        raise SystemExit(
+            f"cannot reach PyPI to establish what is published. This is a transport "
+            f"failure, not evidence about {path}: {error}"
+        ) from error
+    except json.JSONDecodeError as error:
+        raise SystemExit(
+            f"PyPI answered for {path} with something that is not JSON, which is what a "
+            f"throttle or an error page looks like on a successful request: {error}"
+        ) from error
+
+
+def from_registry(name: str) -> dict | None:
+    """The latest published version's surface, or None when nothing is published."""
+    project = ask_pypi(name)
+    if project is None:
+        return None
+    # PyPI reports the newest STABLE release here, ignoring prereleases, so this does
+    # not baseline onto an rc the day someone uploads one. Visuals measured that across
+    # django, numpy and urllib3. The one state where it misbehaves is a project whose
+    # ONLY releases are prereleases: info.version is then a prerelease and the baseline
+    # would be pinned to it. Documented rather than coded around -- this repository
+    # publishes nothing, so writing speculative handling would be untestable here.
+    version = project.get("info", {}).get("version")
+    if not isinstance(version, str):
+        raise SystemExit(f"PyPI serves {name} but names no latest version")
+    release = ask_pypi(f"{name}/{version}")
+    if release is None:
+        raise SystemExit(f"PyPI names {name} {version} as latest but does not serve it")
+
+    files = release.get("urls", ())
+    sdists = [f for f in files if f.get("packagetype") == "sdist"]
+    if not sdists:
+        wheels = [f for f in files if f.get("packagetype") == "bdist_wheel"]
+        raise SystemExit(
+            f"{name} {version} is published but ships no sdist"
+            + (
+                f" -- only wheels ({', '.join(w['filename'] for w in wheels)}). A wheel "
+                "carries no pyproject.toml, so the console-script half of the contract "
+                "would have to be read from dist-info/entry_points.txt instead. This "
+                "script does not implement that tier, and will not quietly record a "
+                "weaker baseline in its place: publish an sdist, or extend it."
+                if wheels
+                else ", and no wheel either, so there is nothing to recover."
+            )
+        )
+
+    chosen = next(iter(sdists))
+    with tempfile.TemporaryDirectory() as work:
+        area = pathlib.Path(work)
+        archive = area / chosen["filename"]
+        with urllib.request.urlopen(chosen["url"]) as response:
+            archive.write_bytes(response.read())
+        unpacked = area / "src"
+        with tarfile.open(archive) as tar:
+            tar.extractall(unpacked, filter="data")
+        try:
+            (tree,) = [entry for entry in unpacked.iterdir() if entry.is_dir()]
+        except ValueError as error:
+            raise SystemExit(
+                f"the sdist for {name} {version} does not unpack to a single directory, "
+                "so the tree to read the surface from is ambiguous"
+            ) from error
+        return {
+            "version": version,
+            "source": f"{SDIST}:{chosen['filename']} unpacked and read with tests/surface.py",
+            "surface": extractor.surface(tree),
+        }
+
+
+def remote_tags() -> dict:
+    """Every tag ORIGIN serves, mapped to the object ids it serves for that tag.
+
+    Never `git tag --list`, which is wrong in two opposite directions. On a runner
+    `actions/checkout@v4` fetches no tags at all, so a local listing comes back empty
+    however many the remote holds -- and this generator would then call `head:` the best
+    reachable tier at exactly the moment a tag made that false, blind to the one thing
+    the workflow re-runs it with `--stdout` to notice. In a fork the error inverts: a
+    fork shares the upstream's object store, so a locally visible tag can be the
+    upstream's, and filing its surface here would claim a release nobody made in this
+    repository. `git ls-remote` asks the only party that knows which tags are ours.
+
+    An annotated tag arrives as two lines -- the tag object, and the commit it peels to
+    under `<ref>^{}` -- so both ids are collected under the one name, and the local
+    commit has to match one of them.
+    """
+    served: dict = {}
+    for line in run("ls-remote", "--tags", REMOTE).splitlines():
+        fields = line.split()
+        if len(fields) != len(("object", "ref")):
+            continue
+        object_id, ref = fields
+        if not ref.startswith(TAG_REF_PREFIX):
+            continue
+        name = ref[len(TAG_REF_PREFIX) :].removesuffix(PEELED_SUFFIX)
+        if name:
+            served.setdefault(name, set()).add(object_id)
+    return served
+
+
+def assert_tag_is_readable_here(tag: str, objects: set) -> None:
+    """A tag ORIGIN serves must exist in this clone, and be the same object.
+
+    Neither half may degrade to a skip. A remote tag this clone never fetched cannot be
+    reproduced with `git archive`, and passing over it would restore exactly the
+    blindness `remote_tags` exists to remove: a `head:` baseline reported while the
+    remote holds a tag. A shallow clone fails the same way for a different reason -- the
+    tag's tree is simply absent. And a local tag naming a different commit than the
+    remote's is not the artifact anybody resolved, so its surface is not the published
+    one.
+    """
+    if run("rev-parse", "--is-shallow-repository") == "true":
+        raise SystemExit(
+            f"{REMOTE} serves tag {tag}, but this clone is shallow, so that tag's tree "
+            f"is absent and `git archive {tag}` cannot reproduce it. Reporting a lower "
+            f"tier from here would be blindness rather than a finding; run: "
+            f"git fetch --force --tags --unshallow"
+        )
+    try:
+        local = run("rev-parse", f"{tag}^{{commit}}")
+    except SystemExit as error:
+        raise SystemExit(
+            f"{REMOTE} serves tag {tag}, but this clone cannot resolve it ({error}). "
+            f"Skipping it would report a weaker baseline than the remote can prove; "
+            f"run: git fetch --force --tags"
+        ) from error
+    if local not in objects:
+        raise SystemExit(
+            f"tag {tag} is {local} here, but {REMOTE} serves {sorted(objects)} for it. "
+            f"Refusing to build a baseline from a tag whose identity is unsettled: a tag "
+            f"names an artifact only if the remote and this clone agree what it is."
+        )
+
+
+def from_tag() -> dict | None:
+    """The highest tag ORIGIN serves whose tree declares the version its name claims.
+
+    The candidates come from the remote, never from `git tag --list`: see `remote_tags`.
+    """
+    served = remote_tags()
+    if not served:
+        return None
+
+    usable, mismatched = [], []
+    for tag, objects in served.items():
+        assert_tag_is_readable_here(tag, objects)
+        claimed = tag.lstrip("v")
+        with tempfile.TemporaryDirectory() as work:
+            tree = pathlib.Path(work)
+            archive = tree / "tag.tar"
+            archive.write_bytes(
+                subprocess.run(
+                    ["git", "-C", str(ROOT), "archive", "--format=tar", tag],
+                    capture_output=True,
+                    check=True,
+                ).stdout
+            )
+            content = tree / "content"
+            with tarfile.open(archive) as tar:
+                tar.extractall(content, filter="data")
+            manifest = content / "pyproject.toml"
+            if not manifest.is_file():
+                mismatched.append(f"{tag} (no pyproject.toml)")
+                continue
+            _, actual = declared(manifest)
+            if actual != claimed:
+                # Main's warning: a tag can point at a commit that still declares an
+                # older version. Reproducing it would file this surface under a version
+                # that tree never had.
+                mismatched.append(f"{tag} declares {actual}")
+                continue
+            usable.append((version_key(actual), actual, tag, extractor.surface(content)))
+
+    for entry in mismatched:
+        print(f"skipping tag: {entry}", file=sys.stderr)
+    if not usable:
+        return None
+
+    _, version, tag, names = max(usable)
+    return {
+        "version": version,
+        "source": (
+            f"{ARCHIVE}:{tag} reproduced with `git archive` and read with "
+            "tests/surface.py; nothing is published for this distribution, so a tag "
+            "whose tree declares this exact version is the strongest artifact available."
+        ),
+        "surface": names,
+    }
+
+
+def from_head() -> dict:
+    """Last resort: the tree itself, saying so."""
+    name, version = declared(ROOT / "pyproject.toml")
+    return {
+        "version": version,
+        "source": (
+            f"{HEAD}:{run('rev-parse', 'HEAD')} -- nothing is published for {name} on "
+            "PyPI and no tag declares a version, so the only thing anyone can consume is "
+            "a git install of the version pyproject.toml declares, and this surface is "
+            "read from the tree that declares it. Regenerate once a release or tag exists."
+        ),
+        "surface": extractor.surface(ROOT),
+    }
+
+
+def build() -> dict:
+    """The baseline, from the best tier that actually exists."""
+    name, _ = declared(ROOT / "pyproject.toml")
+    return from_registry(name) or from_tag() or from_head()
+
+
+def main(argv: list) -> int:
+    document = json.dumps(build(), indent=int(True) + int(True)) + "\n"
+    if "--stdout" in argv:
+        sys.stdout.write(document)
+    else:
+        BASELINE.write_text(document)
+        print(f"wrote {BASELINE.relative_to(ROOT)}")
+    return int(False)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[int(True) :]))

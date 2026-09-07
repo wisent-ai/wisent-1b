@@ -41,12 +41,12 @@ dev = [
 ]
 
 [project.scripts]
-rej-1b-train = "scripts.train:main"
-rej-1b-generate = "scripts.generate:main"
+rej-1b-train = "rej_1b.train_cli:main"
+rej-1b-generate = "rej_1b.generate_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rej_1b*", "scripts*"]
+include = ["rej_1b*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
