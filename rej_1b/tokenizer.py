@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from typing import List, Union
 
+# Printable ASCII and the extended Latin block, by code point.
+FIRST_PRINTABLE_ASCII = 32
+ASCII_DELETE = 127
+FIRST_EXTENDED_LATIN = 161
+LATIN_1_END = 256
+
 
 class RejTokenizer:
     """Character-level tokenizer with an optional HuggingFace backend.
@@ -49,9 +55,9 @@ class RejTokenizer:
         # Build a deterministic character vocabulary of printable ASCII + common extras.
         chars = (
             ["<PAD>", "<EOS>", "<UNK>"]
-            + [chr(i) for i in range(32, 127)]
+            + [chr(i) for i in range(FIRST_PRINTABLE_ASCII, ASCII_DELETE)]
             + ["\n", "\t"]
-            + [chr(i) for i in range(161, 256)]  # extended latin
+            + [chr(i) for i in range(FIRST_EXTENDED_LATIN, LATIN_1_END)]  # extended latin
         )
         if vocab_size is not None:
             chars = chars[:vocab_size]

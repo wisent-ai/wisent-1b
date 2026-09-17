@@ -16,6 +16,11 @@ import torch.nn.functional as F
 from .config import RejConfigV2
 from .model import FeedForward, FlexibleMultiHeadAttention
 
+# One half, from the closed form of KL(N(mean, std^2) || N(0, 1)).
+KL_HALF = 0.5
+# A direction control is checked on its last two dimensions: named concepts by subspace rank.
+DIRECTION_SHAPE_DIMENSIONS = 2
+
 
 def orthonormalize(x: torch.Tensor) -> torch.Tensor:
     """Orthonormalize rows of x via QR decomposition.
@@ -110,7 +115,7 @@ class ProbabilisticConceptState:
     def kl_divergence(self) -> torch.Tensor:
         """KL from N(mean, std^2) to N(0, 1), summed over batch/concepts/rank."""
         var = self.std.pow(2)
-        kl = 0.5 * (self.mean.pow(2) + var - 1.0 - 2.0 * self.log_std)
+        kl = KL_HALF * (self.mean.pow(2) + var - 1.0 - 2.0 * self.log_std)
         return kl.sum()
 
     def deterministic_coords(self) -> torch.Tensor:
@@ -479,7 +484,7 @@ class RejRNMv2(nn.Module):
                     f"Control '{mode}' last dim ({tensor.shape[-1]}) must match "
                     f"n_named_concepts ({self.config.n_named_concepts})"
                 )
-            if mode == "direction" and tensor.shape[-2:] != (self.config.n_named_concepts, self.config.subspace_rank):
+            if mode == "direction" and tuple(tensor.shape)[-DIRECTION_SHAPE_DIMENSIONS:] != (self.config.n_named_concepts, self.config.subspace_rank):
                 raise ValueError(
                     f"Control 'direction' must have shape (B, n_named, subspace_rank) = "
                     f"(..., {self.config.n_named_concepts}, {self.config.subspace_rank})"

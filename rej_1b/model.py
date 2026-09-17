@@ -10,6 +10,9 @@ import torch.nn.functional as F
 
 from .config import RejConfig
 
+# A transformer feed-forward layer widens by this factor, the usual choice since the original design.
+FFN_EXPANSION = 4
+
 
 class FlexibleMultiHeadAttention(nn.Module):
     """Multi-head attention supporting different query/key/value dimensions.
@@ -171,7 +174,7 @@ class RejLayer(nn.Module):
         self.concept_ln3 = nn.LayerNorm(dc, eps=config.layer_norm_eps)
         self.concept_ffn = FeedForward(
             d_in=dc,
-            intermediate_size=4 * dc,
+            intermediate_size=FFN_EXPANSION * dc,
             d_out=dc,
             dropout=config.dropout,
         )

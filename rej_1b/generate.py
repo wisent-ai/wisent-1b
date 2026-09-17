@@ -11,6 +11,9 @@ from .model import RejRNM
 from .model_v2 import RejRNMv2
 from .tokenizer import RejTokenizer
 
+# Tokens generated per prompt unless the caller asks for more.
+DEFAULT_MAX_NEW_TOKENS = 50
+
 
 @dataclass
 class GenerationOutput:
@@ -55,7 +58,7 @@ def generate(
     tokenizer: RejTokenizer,
     prompt: str,
     controls: Optional[Dict[str, float]] = None,
-    max_new_tokens: int = 50,
+    max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
     temperature: float = 1.0,
     top_k: Optional[int] = None,
     top_p: Optional[float] = None,
@@ -207,7 +210,7 @@ def generate_v2(
     tokenizer: RejTokenizer,
     prompt: str,
     controls: Optional[Dict[str, Union[float, Dict[str, float]]]] = None,
-    max_new_tokens: int = 50,
+    max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
     temperature: float = 1.0,
     top_k: Optional[int] = None,
     top_p: Optional[float] = None,

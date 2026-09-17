@@ -11,6 +11,10 @@ from tqdm import tqdm
 from .model import RejRNM
 from .model_v2 import RejRNMv2
 
+# PyTorch's cross-entropy ignores targets with this label; progress is logged every few steps.
+IGNORE_INDEX = -100
+DEFAULT_LOG_EVERY = 10
+
 
 class TokenDataset(Dataset):
     """Simple dataset that yields sequences of token ids."""
@@ -47,7 +51,7 @@ def compute_lm_loss(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
     loss = F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)),
         shift_labels.view(-1),
-        ignore_index=-100,
+        ignore_index=IGNORE_INDEX,
     )
     return loss
 
@@ -107,7 +111,7 @@ def train(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     num_steps: int,
-    log_every: int = 10,
+    log_every: int = DEFAULT_LOG_EVERY,
     save_every: int | None = None,
     save_fn=None,
     carry_passes: int = 1,
@@ -406,7 +410,7 @@ def train_v2_multilingual(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     num_steps: int,
-    log_every: int = 10,
+    log_every: int = DEFAULT_LOG_EVERY,
     save_every: int | None = None,
     save_fn=None,
 ) -> List[Dict[str, float]]:
@@ -462,7 +466,7 @@ def train_v2_aligned(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     num_steps: int,
-    log_every: int = 10,
+    log_every: int = DEFAULT_LOG_EVERY,
     save_every: int | None = None,
     save_fn=None,
 ) -> List[Dict[str, float]]:
@@ -514,7 +518,7 @@ def train_v2(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     num_steps: int,
-    log_every: int = 10,
+    log_every: int = DEFAULT_LOG_EVERY,
     save_every: int | None = None,
     save_fn=None,
     perturb_controls: bool = False,

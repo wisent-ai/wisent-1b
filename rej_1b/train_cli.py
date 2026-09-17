@@ -14,6 +14,9 @@ from rej_1b.tokenizer import RejTokenizer
 from rej_1b.train import TokenDataset, collate_fn, train
 from rej_1b.utils import get_device, save_checkpoint
 
+# The command-line trainer logs less often than the library default.
+CLI_LOG_EVERY = 50
+
 
 def load_text_corpus(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
@@ -99,7 +102,7 @@ def main():
         optimizer=optimizer,
         device=device,
         num_steps=args.num_steps,
-        log_every=50,
+        log_every=CLI_LOG_EVERY,
         save_every=args.save_every,
         save_fn=save_fn,
         carry_passes=carry_passes,

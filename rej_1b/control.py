@@ -15,6 +15,10 @@ import torch.nn.functional as F
 
 from .model import RejRNM
 
+# PyTorch's cross-entropy ignores targets with this label; the perturbation scale is a training knob.
+IGNORE_INDEX = -100
+DEFAULT_PERTURBATION_SCALE = 0.5
+
 
 @dataclass
 class ConceptExample:
@@ -106,7 +110,7 @@ class ControlFineTuner:
         model: RejRNM,
         optimizer: torch.optim.Optimizer,
         device: torch.device,
-        perturbation_scale: float = 0.5,
+        perturbation_scale: float = DEFAULT_PERTURBATION_SCALE,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -131,7 +135,7 @@ class ControlFineTuner:
         base_loss = F.cross_entropy(
             base_logits[:, :-1, :].reshape(-1, base_logits.size(-1)),
             batch[:, 1:].reshape(-1),
-            ignore_index=-100,
+            ignore_index=IGNORE_INDEX,
         )
 
         # Perturbed forward with random named-concept controls.
@@ -144,7 +148,7 @@ class ControlFineTuner:
         pert_loss = F.cross_entropy(
             pert_logits[:, :-1, :].reshape(-1, pert_logits.size(-1)),
             batch[:, 1:].reshape(-1),
-            ignore_index=-100,
+            ignore_index=IGNORE_INDEX,
         )
 
         loss = base_loss + pert_loss
