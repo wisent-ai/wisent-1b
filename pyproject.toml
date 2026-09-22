@@ -41,8 +41,8 @@ dev = [
 ]
 
 [project.scripts]
-rej-1b-train = "rej_1b.train_cli:main"
-rej-1b-generate = "rej_1b.generate_cli:main"
+rej-1b-train = "rej_1b.cli.train:main"
+rej-1b-generate = "rej_1b.cli.generate:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0",
-  "source": "head:80ff7d3e5a16f7717ea9d7dadb821ea213d2cf97 -- nothing is published for rej-1b on PyPI and no tag declares a version, so the only thing anyone can consume is a git install of the version pyproject.toml declares, and this surface is read from the tree that declares it. Regenerate once a release or tag exists.",
+  "version": "0.2.0",
+  "source": "head:90d77db3c262bdd9cf822332f0815eaad1ffb994 -- nothing is published for rej-1b on PyPI and no tag declares a version, so the only thing anyone can consume is a git install of the version pyproject.toml declares, and this surface is read from the tree that declares it. Regenerate once a release or tag exists.",
   "surface": [
     "api:GenerationOutput",
     "api:RejConfig",
@@ -9,9 +9,11 @@
     "api:RejRNMv2",
     "api:RejTokenizer",
     "api:generate",
+    "api:generate_v2",
     "api:get_device",
     "api:load_checkpoint",
     "api:rej_1b_config",
+    "api:rej_1b_v2_config",
     "api:rej_tiny_config",
     "api:rej_tiny_v2_config",
     "api:save_checkpoint",

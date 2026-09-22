@@ -27,7 +27,7 @@ jobs:
 
       - name: Make tags and history visible
         # actions/checkout fetches one commit and no tags. The tier check below runs
-        # tests/baseline.py, which asks ORIGIN which tags exist -- `git ls-remote
+        # tests/baseline, which asks ORIGIN which tags exist -- `git ls-remote
         # --tags origin`, never this working copy -- so it can no longer conclude
         # head: is the best artifact while the remote holds a tag, and it cannot take
         # a fork's inherited tags for ours either. That does not make this step
@@ -188,7 +188,7 @@ jobs:
         run: |
           set -euo pipefail
           # released-surface.json must describe something a user can actually get, and
-          # say which kind of artifact it came from. tests/baseline.py records that as
+          # say which kind of artifact it came from. tests/baseline records that as
           # the first token of "source" -- pypi-sdist:, pypi-wheel:, stado:,
           # git-archive: or head: -- so this branches on a marker rather than on prose.
           #
@@ -225,7 +225,7 @@ jobs:
           if [ "$claims_registry" = yes ]; then
             if ! curl -sSf "https://pypi.org/pypi/$project/$released/json" >/dev/null; then
               echo "::error::the baseline claims $project $released is published, but" \
-                "PyPI does not serve it. Run: python3 tests/baseline.py"
+                "PyPI does not serve it. Run: python3 -m tests.baseline"
               false
             fi
             echo "Baseline $released is served by PyPI, as its marker claims."
@@ -265,7 +265,7 @@ jobs:
             if printf '%s' "$answer" | jq -e '.info.name' >/dev/null; then
               echo "::error::the baseline is '$marker', but PyPI publishes $project." \
                 "The baseline must be recovered from the latest published artifact," \
-                "not from a tag or the working tree. Run: python3 tests/baseline.py"
+                "not from a tag or the working tree. Run: python3 -m tests.baseline"
               false
             elif ! printf '%s' "$answer" |
                 jq -e '(.message // "") | ascii_downcase | contains("not found")' >/dev/null; then
@@ -278,7 +278,7 @@ jobs:
           fi
 
           # Honest about its tier is not the same as ON the right tier. A tag or a
-          # release can appear after the baseline was generated, and tests/baseline.py
+          # release can appear after the baseline was generated, and tests/baseline
           # ranks pypi-sdist > pypi-wheel > stado > git-archive > head. Ask the generator
           # which tier is reachable now and refuse a baseline sitting on a weaker one,
           # otherwise the gate keeps measuring against a superseded artifact. Credit to
@@ -297,7 +297,7 @@ jobs:
           # step blamed the wrong thing; worse, if the committed marker ever also read
           # empty it compared "" against "" and passed VACUOUSLY. Both markers are now
           # asserted non-empty before they are compared.
-          python3 tests/baseline.py --stdout > "$RUNNER_TEMP/best.json" || {
+          python3 -m tests.baseline --stdout > "$RUNNER_TEMP/best.json" || {
             echo "::error::the baseline generator failed, so the best reachable tier is unknown"; false; }
           best="$(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/best.json")"
           # Both spellings of "empty" are rejected. `jq -r` renders an absent marker as
@@ -325,7 +325,7 @@ jobs:
           if [ "$want" != "$have" ]; then
             echo "::error::the baseline is '$have' but '$want' is the best artifact" \
               "reachable now, so the gate is measured against a superseded artifact." \
-              "Run: python3 tests/baseline.py"
+              "Run: python3 -m tests.baseline"
             false
           fi
           echo "Baseline '$have' is still the best artifact available."
