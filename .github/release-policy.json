@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "releases": false,
+  "reason": "The released-surface baseline states that no PyPI project or release tag exists; the only consumable form is a development source checkout."
+}
