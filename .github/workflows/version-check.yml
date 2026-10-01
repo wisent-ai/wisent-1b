@@ -1,14 +1,16 @@
 name: Version check
 
-# Refuse a change whose declared version disagrees with what it did to the public
-# contract. The contract of this distribution is what an installer gets: the names the
-# package promises importers through `__all__`, and the console scripts
-# `[project.scripts]` puts on their PATH. Adding one is a capability, removing one
-# breaks whoever imported it yesterday.
+# Refuse a change whose declared version disagrees with what the change did
+# to this distribution's public surface.
 #
-# The rule itself lives in one place for the whole fleet and is not copied here:
-# https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the two
-# things this repository alone knows: its surface, and the version it declares.
+# Stado owns the gate. `stado release version-gate app-surface` reads the
+# surface statically from the sources named below, never by importing the
+# package: the `__all__` of rej_1b/__init__.py (`api:`) and the console
+# scripts of pyproject.toml (`console-script:`), whose `[project]` version is
+# the declared version. `app-baseline --stdout` reads the same sources from
+# the newest version tag origin serves, which is the tree the PyPI release
+# was built from; `decide` is the shared rule and `conformance` proves it
+# against the shared fixtures before any verdict is trusted.
 
 on:
   pull_request:
@@ -19,313 +21,49 @@ on:
 permissions:
   contents: read
 
+env:
+  SOURCES: --pyproject pyproject.toml --python-all rej_1b/__init__.py
+
 jobs:
   version-check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, stado]
     steps:
       - uses: actions/checkout@v4
 
+      # actions/checkout fetches one commit and no tags; the baseline is read
+      # from the released tag's blobs. Unshallowing errors on an already
+      # complete repository, hence the fallback.
       - name: Make tags and history visible
-        # actions/checkout fetches one commit and no tags. The tier check below runs
-        # tests/baseline, which asks ORIGIN which tags exist -- `git ls-remote
-        # --tags origin`, never this working copy -- so it can no longer conclude
-        # head: is the best artifact while the remote holds a tag, and it cannot take
-        # a fork's inherited tags for ours either. That does not make this step
-        # optional; it changes what the step prevents. Once the remote NAMES a tag
-        # the generator has to READ it: `git archive <tag>` needs that tag's object
-        # and tree present here, and a tag origin serves that this clone cannot
-        # resolve is a hard refusal, never a skip -- skipping it is how a superseded
-        # baseline gets certified as current. So without this fetch the gate is RED
-        # rather than asleep, and right to be. Unshallowing is the same requirement
-        # for the tree: a shallow clone simply lacks it. --unshallow fails on an
-        # already complete repository, hence the fallback. Trap found by Codespy.
         run: git fetch --force --tags --unshallow || git fetch --force --tags
 
-      - name: Install the shared rule
-        # Into a VIRTUAL ENVIRONMENT, never the system interpreter. A bare
-        # `pip install git+...` is a permanently red gate on a current runner: the
-        # ubuntu-latest image now ships a system python3 carrying the
-        # externally-managed marker, so the install dies with
-        # `error: externally-managed-environment` before a single check runs. A gate
-        # that can never pass certifies exactly as little as one that can never fail.
-        # The venv sidesteps the marker without --break-system-packages, and putting
-        # its bin on GITHUB_PATH keeps every later `autoversion` call unchanged.
-        #
-        # The last block is load-bearing, and what it asserts is IDENTITY, not mere
-        # liveness. `autoversion --help` is satisfied by ANY executable on PATH that
-        # exits zero, so a stray or sabotaged binary answers it and the step goes green
-        # having vouched for a rule nobody consulted -- the fail-open twin of the
-        # "command not found" branch, and the worse of the two because it is silent. So
-        # establish WHICH autoversion is about to answer: it must resolve inside the
-        # venv this step just built, and anything else is named and refused. Measured
-        # both ways by Main -- a stranger first on PATH with an empty venv is refused by
-        # path, the venv prepended ahead of a stranger is accepted.
-        #
-        # `export PATH` is not redundant with the GITHUB_PATH line above it. The runner
-        # reads GITHUB_PATH only AFTER the step exits, so that line serves every LATER
-        # step and never this one. Without the export this assertion resolves whatever
-        # `autoversion` the ambient PATH already holds: nothing at all on a clean
-        # runner, so the step dies "command not found" and the gate is permanently red
-        # -- or a saboteur first on PATH, in which case it exits ZERO because the
-        # saboteur answered and this step vouches for a rule nobody asked. Measured by
-        # FixPyA under `env -i`; a stray autoversion on a workstation hides both.
-        # The mktemp fallbacks let this same body run outside a runner unchanged.
-        run: |
-          : "${RUNNER_TEMP:=$(mktemp -d)}"
-          : "${GITHUB_PATH:=$(mktemp)}"
-          python3 -m venv "$RUNNER_TEMP/rule"
-          "$RUNNER_TEMP/rule/bin/python" -m pip install --quiet \
-            "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
-          echo "$RUNNER_TEMP/rule/bin" >> "$GITHUB_PATH"
-          export PATH="$RUNNER_TEMP/rule/bin:$PATH"
-          resolved="$(command -v autoversion || true)"
-          case "$resolved" in
-            "$RUNNER_TEMP/rule/bin/"*) ;;
-            *) echo "::error::autoversion resolves to '${resolved:-nothing}', outside the venv"; false ;;
-          esac
+      - name: Prove the versioning rule against the shared fixtures
+        run: stado release version-gate conformance
 
-      - name: Read the public surface
-        # No package dependencies: the surface is read out of the source with ast and
-        # tomllib, so this stays cheap and cannot be broken by torch or transformers
-        # moving. A module that does not parse fails the step rather than silently
-        # shrinking the surface.
-        run: python3 tests/surface.py > "$RUNNER_TEMP/candidate.json"
-
-      - name: Prove the gate can refuse
-        # A gate that has never refused is decoration. The install step's identity
-        # guard does not establish otherwise: it settles WHICH binary answers, never
-        # whether its answers are right. Only a step that demands a REFUSAL can catch
-        # a fabricated verdict.
-        #
-        # THREE known answers, not one, and all three built from the COMMITTED
-        # baseline: identical surfaces must read `internal`, one name removed must read
-        # `breaking`, one name added must read `additive`. A single expected answer
-        # cannot do it -- a saboteur that always says `internal` satisfies the install
-        # step and every gate step below, because when declared equals released
-        # `internal` IS the passing branch. Building all three from the frozen file
-        # makes this step prove two more things at once: that the committed file is
-        # well formed, and that it is what actually reaches the decision. Credit
-        # CostTrackerTwo for the pair; removal spelling from SwiftFamily.
+      - name: Compare the surface against the released tag
         run: |
           set -euo pipefail
-          : "${RUNNER_TEMP:=$(mktemp -d)}"
-          released="$(jq -r .version released-surface.json)"
-
-          # `- [(.surface | sort | first)]` drops one name without a bare index, which
-          # this workspace's numeric-literal policy would refuse. Each candidate is
-          # exactly the shape tests/surface.py emits: a lone "surface" array.
-          jq '{surface: .surface}' released-surface.json > "$RUNNER_TEMP/same.json"
-          jq '{surface: (.surface - [(.surface | sort | first)])}' \
-            released-surface.json > "$RUNNER_TEMP/removed.json"
-          jq '{surface: (.surface + ["autoversion refusal probe"])}' \
-            released-surface.json > "$RUNNER_TEMP/added.json"
-
-          # Into a file, then read: `$(... | jq)` would discard the rule's exit status,
-          # which is the same defect this workflow's staleness step was repaired for.
-          verdict() {
-            autoversion decide --current "$released" \
-              --published-surface released-surface.json \
-              --candidate-surface "$1" --json > "$RUNNER_TEMP/probe.json" || {
-                echo "::error::the rule failed to decide, so whether this gate can" \
-                  "refuse is unproven"; false; }
-            jq -r .change "$RUNNER_TEMP/probe.json"
-          }
-
-          same="$(verdict "$RUNNER_TEMP/same.json")"
-          removed="$(verdict "$RUNNER_TEMP/removed.json")"
-          added="$(verdict "$RUNNER_TEMP/added.json")"
-          echo "identical surfaces -> $same"
-          echo "one name removed   -> $removed"
-          echo "one name added     -> $added"
-
-          [ "$same" = internal ] || {
-            echo "::error::comparing the frozen baseline with itself read '$same', not" \
-              "internal. Either the committed file is malformed, or the thing answering" \
-              "here is not reading it."; false; }
-          [ "$removed" = breaking ] || {
-            echo "::error::removing a name read as '$removed', not breaking. This gate" \
-              "cannot refuse, so every verdict it reports is decoration."; false; }
-          [ "$added" = additive ] || {
-            echo "::error::adding a name read as '$added', not additive. The thing" \
-              "answering here is not the rule this gate is supposed to consult."; false; }
-          echo "The rule answers internal, breaking and additive as it must."
-
-      - name: Compare against the released contract
-        run: |
-          set -euo pipefail
-          released="$(jq -r .version released-surface.json)"
-          declared="$(awk -F'"' '/^version *=/{print $2; exit}' pyproject.toml)"
-          echo "released: $released"
+          stado release version-gate app-baseline --root . $SOURCES --stdout > "$RUNNER_TEMP/released.json"
+          stado release version-gate app-surface --root . $SOURCES > "$RUNNER_TEMP/candidate.json"
+          released="$(jq -r .version "$RUNNER_TEMP/released.json")"
+          declared="$(jq -r .version "$RUNNER_TEMP/candidate.json")"
+          echo "released: $released ($(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/released.json"))"
           echo "declared: $declared"
-
-          verdict="$(autoversion decide \
+          verdict="$(stado release version-gate decide --json \
             --current "$released" \
-            --published-surface released-surface.json \
-            --candidate-surface "$RUNNER_TEMP/candidate.json" \
-            --json)"
+            --published-surface "$RUNNER_TEMP/released.json" \
+            --candidate-surface "$RUNNER_TEMP/candidate.json")"
           echo "$verdict"
-
           change="$(printf '%s' "$verdict" | jq -r .change)"
           required="$(printf '%s' "$verdict" | jq -r .next)"
-
           if [ "$declared" = "$released" ]; then
-            if [ "$change" != "internal" ]; then
-              echo "::error::The public contract changed ($change) but pyproject.toml still" \
-                "declares the released version $released. The next version must be $required."
+            if [ "$change" != internal ]; then
+              echo "::error::the surface changed ($change) but pyproject.toml still declares $released; the next version must be $required."
               false
             fi
-            echo "Nothing released yet and the contract is unchanged."
+            echo "pyproject.toml remains $released and the surface is unchanged."
           elif [ "$declared" != "$required" ]; then
-            echo "::error::pyproject.toml declares $declared, but a $change change to" \
-              "$released requires $required."
+            echo "::error::pyproject.toml declares $declared, but a $change change to $released requires $required."
             false
           else
-            echo "Declared version matches the $change change."
+            echo "pyproject.toml $declared matches the $change change."
           fi
-
-      - name: Refuse a baseline that misdescribes itself
-        if: github.ref == 'refs/heads/main'
-        run: |
-          set -euo pipefail
-          # released-surface.json must describe something a user can actually get, and
-          # say which kind of artifact it came from. tests/baseline records that as
-          # the first token of "source" -- pypi-sdist:, pypi-wheel:, stado:,
-          # git-archive: or head: -- so this branches on a marker rather than on prose.
-          #
-          # The check runs both ways, because each direction hides a different lie. A
-          # baseline claiming a release the registry does not serve measures every later
-          # comparison against something nobody can install. A baseline claiming to be
-          # unpublished while the project IS on PyPI is worse: it quietly abandons the
-          # real released contract and lets a breaking change look like a first commit.
-          project="$(awk -F'"' '/^name *=/{print $2; exit}' pyproject.toml)"
-          if [ -z "$project" ]; then
-            # PyPI's absence answer is generic -- it does not name what it was asked
-            # about -- so a lookup of the wrong or empty name reads as proven absence.
-            # An empty name currently returns HTML and so refuses below, but relying on
-            # that is relying on a redirect. Refuse on the repository fact instead, which
-            # no registry behaviour can change. Naming asymmetry found by HooksRotator.
-            echo "::error::could not read the distribution name from pyproject.toml, so" \
-              "there is nothing to ask PyPI about. Did [project] name move or go dynamic?"
-            false
-          fi
-          released="$(jq -r .version released-surface.json)"
-          marker="$(jq -r '.source | split(" ") | first' released-surface.json)"
-          echo "baseline marker: $marker"
-
-          case "$marker" in
-            pypi-sdist:*|pypi-wheel:*) claims_registry=yes ;;
-            stado:*|git-archive:*|head:*) claims_registry=no ;;
-            *)
-              echo "::error::unknown baseline marker '$marker'. The first token of" \
-                ".source must be one of pypi-sdist: pypi-wheel: stado: git-archive: head:"
-              false
-              ;;
-          esac
-
-          if [ "$claims_registry" = yes ]; then
-            if ! curl -sSf "https://pypi.org/pypi/$project/$released/json" >/dev/null; then
-              echo "::error::the baseline claims $project $released is published, but" \
-                "PyPI does not serve it. Run: python3 -m tests.baseline"
-              false
-            fi
-            echo "Baseline $released is served by PyPI, as its marker claims."
-          else
-            # Absence must be TESTIMONY, never silence. Inferring "not published" from a
-            # failed request reads a dead network, a DNS failure, a rate limit or a
-            # server error as proof of absence, and the uninformative answer is the
-            # PASSING one -- which for a head: baseline is the only thing standing
-            # between it and a project that quietly acquired a real release.
-            #
-            # So require the index to ANSWER: either it names the project, or it states
-            # it has no such project. Anything else -- empty body, an error page, a
-            # permission refusal -- is unproven and refuses. Reading the answer's content
-            # rather than curl's exit status is what separates those cases; a status code
-            # would do it too but every spelling of one is a bare numeral the hook eats.
-            #
-            # `|| true` is safe ONLY because both branches below demand specific content
-            # and the fallthrough refuses. Never copy it into a check that reads an empty
-            # answer as success. Found by AgentGateway; permission refusal is Ultrareach's.
-            #
-            # The control below is NOT here for reachability -- the content check already
-            # covers that, since an unreachable index yields no answer to read. It is here
-            # because "unproven" is also what a BROKEN EXPRESSION produces: a jq path that
-            # cannot recognise a published project refuses forever while the registry
-            # answers perfectly, and the operator blames PyPI. Asserting the positive
-            # branch against a project that certainly exists makes that failure loud and
-            # correctly attributed. AdamMonitor hit it twice writing this check by hand;
-            # PatentCli found jq and jaq disagree on absent keys, which is how a spelling
-            # that works locally can behave differently on the runner.
-            if ! curl -s "https://pypi.org/pypi/pip/json" | jq -e '.info.name' >/dev/null; then
-              echo "::error::this step cannot recognise a project PyPI definitely serves," \
-                "so its verdict about $project would be meaningless. The check itself is" \
-                "broken -- not the registry, and not the baseline."
-              false
-            fi
-            answer="$(curl -s "https://pypi.org/pypi/$project/json" || true)"
-            if printf '%s' "$answer" | jq -e '.info.name' >/dev/null; then
-              echo "::error::the baseline is '$marker', but PyPI publishes $project." \
-                "The baseline must be recovered from the latest published artifact," \
-                "not from a tag or the working tree. Run: python3 -m tests.baseline"
-              false
-            elif ! printf '%s' "$answer" |
-                jq -e '(.message // "") | ascii_downcase | contains("not found")' >/dev/null; then
-              echo "::error::PyPI did not answer whether it serves $project, so the" \
-                "baseline's claim that nothing is published is unproven. Refusing rather" \
-                "than reading silence as absence."
-              false
-            fi
-            echo "PyPI states it serves no $project, so '$marker' is the honest baseline."
-          fi
-
-          # Honest about its tier is not the same as ON the right tier. A tag or a
-          # release can appear after the baseline was generated, and tests/baseline
-          # ranks pypi-sdist > pypi-wheel > stado > git-archive > head. Ask the generator
-          # which tier is reachable now and refuse a baseline sitting on a weaker one,
-          # otherwise the gate keeps measuring against a superseded artifact. Credit to
-          # Codespy, who hit this as a baseline outranked by a newer tag.
-          #
-          # --stdout, and only the ARTIFACT IDENTITY is compared, never the surface. The
-          # committed released-surface.json is never rewritten here and the regenerated
-          # surface never reaches the decision: recomputing BOTH sides at check time is
-          # the one shape that would make this gate structurally unable to refuse. Do not
-          # "simplify" this into comparing surfaces.
-          #
-          # Run the generator into a FILE and test its status explicitly. Inside a
-          # command substitution containing a pipeline the generator's exit status is
-          # discarded -- the substitution reports jq's status -- and `set -e` does not
-          # reach inside one. So a dead generator used to yield an empty `best` and this
-          # step blamed the wrong thing; worse, if the committed marker ever also read
-          # empty it compared "" against "" and passed VACUOUSLY. Both markers are now
-          # asserted non-empty before they are compared.
-          python3 -m tests.baseline --stdout > "$RUNNER_TEMP/best.json" || {
-            echo "::error::the baseline generator failed, so the best reachable tier is unknown"; false; }
-          best="$(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/best.json")"
-          # Both spellings of "empty" are rejected. `jq -r` renders an absent marker as
-          # the literal string "null" -- measured: `"" | split(" ") | first` is null at
-          # exit zero -- and `-n` reads that four-character string as non-empty, so
-          # testing for the empty string alone leaves standing exactly the vacuous
-          # comparison this guard exists to refuse: "null" against "null", equal, green.
-          [ -n "$best" ] && [ -n "$marker" ] &&
-            [ "$best" != null ] && [ "$marker" != null ] || {
-              echo "::error::a marker read empty, so this comparison would be vacuous"; false; }
-          if [ "${marker%%:*}" = head ]; then
-            # head:<sha> moves with every commit, so only the tier is comparable. Full
-            # equality would demand regenerating the baseline in every commit that
-            # touches anything -- an infinite ratchet, not a gate.
-            want="${best%%:*}"
-            have="${marker%%:*}"
-          else
-            # Every other tier names its artifact exactly, by filename or by tag, and
-            # those do not move. Comparing the whole marker also catches a baseline
-            # superseded WITHIN its tier -- an older sdist, or a tag outranked by a
-            # newer one -- which a tier-prefix comparison passes straight through.
-            want="$best"
-            have="$marker"
-          fi
-          if [ "$want" != "$have" ]; then
-            echo "::error::the baseline is '$have' but '$want' is the best artifact" \
-              "reachable now, so the gate is measured against a superseded artifact." \
-              "Run: python3 -m tests.baseline"
-            false
-          fi
-          echo "Baseline '$have' is still the best artifact available."

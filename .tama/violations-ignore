@@ -12,5 +12,4 @@ assets/readme-banner.svg
 #   LICENSE — GitHub reads the licence from the root
 #   README.md — GitHub shows it on the repository page
 #   pyproject.toml — pip and the Python build backends
-#   released-surface.json — the Wisent release tooling reads it from the root
 .
