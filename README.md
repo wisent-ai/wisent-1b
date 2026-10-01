@@ -74,14 +74,6 @@ Expected output (approximate):
 - [Training](docs/training.md) — pretraining, the aligned and multilingual
   steps, and the commands that run them.
 
-## Tests
-
-```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -v
-```
-
-(The environment may have conflicting pytest plugins; disabling autoload avoids unrelated import errors.)
-
 ## Status
 
 This is a reference implementation of the architecture described in the manuscript at [wisent-ai/wisent-1b-paper](https://github.com/wisent-ai/wisent-1b-paper) (`neurips_2024.tex`). It contains no pretrained 1B weights — only the model definition, training code, and a working toy demo. Scaling to 1B+ parameters requires the data pipeline and compute described in the paper.
