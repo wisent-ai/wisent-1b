@@ -91,6 +91,14 @@ This is a reference implementation of the architecture described in the manuscri
 
 Version 0.3.0 replaced the PyTorch package with this Rust crate. Checkpoints
 written by the PyTorch package (`.pt` files) cannot be loaded.
+The old setuptools manifest and Python distribution version-check workflow
+are removed with that distribution. No native package or release tag has
+been published; both release declarations keep publishing disabled.
+
+The real CPU regression source is in `tests/cli/`. Run
+`cargo test --test cli-journeys -- --nocapture` to exercise training, saved
+weights, generation and refusals. The [training guide](docs/training.md#real-cli-regression-journeys)
+describes retained evidence and the limits of these toy-model checks.
 
 ## Citation
 

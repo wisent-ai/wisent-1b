@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
   "releases": false,
-  "reason": "No PyPI project or release tag exists; the only consumable form is a development source checkout."
+  "reason": "No crates.io package or release tag exists; the only consumable form is a development source checkout built with Cargo."
 }

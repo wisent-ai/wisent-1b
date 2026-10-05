@@ -126,3 +126,37 @@ The crate exposes the same operations:
 - **Concepts:** `train::ConceptProbe` trains a probe on a named concept slot,
   and `train::ControlFineTuner` fine-tunes under random controls of a stated
   scale.
+
+## Real CLI regression journeys
+
+The native regression target is:
+
+```bash
+cargo test --test cli-journeys -- --nocapture
+```
+
+The cases in `tests/cli/` launch the actual `rej-1b` binary on CPU. They train
+small models with Candle, without a model download, hosted inference, a Python
+runtime or mocked dependencies. They cover v1, carried v1, plain v2, alignment
+and parallel-text training. The assertions inspect the saved configuration,
+finite model weights, the head's update between optimizer steps and the
+reported weighted loss. Greedy generation from the checkpoint is compared
+with the highest logit from a direct forward pass of that saved model.
+
+The refusal cases cover a missing carry schedule, missing parallel text,
+conflicting data sources, an unknown concept and a v2 control on a v1 model.
+A short-corpus case checks that the final checkpoint records completed steps,
+not the requested step count.
+
+Each case retains its inputs, checkpoints and evidence under a distinct
+`target/cli-journeys/` directory. `source.json` identifies the Git revision,
+working-tree state and executable Git object hash; `source.diff` records
+tracked changes, and `Cargo.lock` records resolved dependencies. Each command
+has argument, exit-status, elapsed-time, stdout and stderr records. A case
+writes `result.json` with `passed: true` only after its assertions complete.
+Use a clean committed source tree for release evidence: a dirty working tree
+is recorded but is not an exact-revision qualification.
+
+These are toy-model behavior checks, not a benchmark of pretrained 1B
+weights or a GPU qualification. Adding their source does not establish a
+passing run; only the retained results of an executed target do.
