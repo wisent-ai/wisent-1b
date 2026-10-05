@@ -27,44 +27,55 @@ Documentation: [Rej-1B model architecture and runtime](https://wisent.com/docs/m
 
 ## What's inside
 
-- `rej_1b/model/` — `RejRNM` and `RejLayer` implementing the dual-stream architecture.
-- `rej_1b/model_v2/` — `RejRNMv2`, an advanced geometry-native version (subspaces, probabilistic concepts, non-linear cells, manifold decoder).
-- `rej_1b/config.py` — `RejConfig` / `RejConfigV2`, plus factory helpers.
-- `rej_1b/generate/` — controlled generation for v1 (`generate`) and v2 (`generate_v2`).
-- `rej_1b/train/` — causal language-modeling training utilities for v1 and v2.
-- `rej_1b/control.py` — lightweight helpers for concept alignment and control fine-tuning.
-- `scripts/demo_toy.py` — end-to-end demo of v1 concept control on synthetic data.
-- `scripts/demo_geometric.py` — end-to-end demo of v2 geometric concept control.
-- `rej_1b/cli/` — the two console scripts, `rej-1b-train` and `rej-1b-generate`.
-- `tests/` — unit tests.
+Rej-1B is written in Rust on [candle](https://github.com/huggingface/candle).
+
+- `src/model/`: `RejRnm` and `RejLayer`, the dual-stream architecture.
+- `src/model_v2/`: `RejRnmV2`, the geometric version. It has subspace
+  concepts, probabilistic concept states, non-linear cells and a manifold
+  decoder.
+- `src/config.rs`: `RejConfig` and `RejConfigV2`, read from a JSON file.
+  Every field is required. `configs/` holds the declared configurations: the
+  1B shapes and two tiny ones for quick runs.
+- `src/generate/`: controlled generation for both models.
+- `src/train/`: language-model training for both models. It also has
+  concept-alignment and multilingual training for v2, a concept probe, and
+  control fine-tuning.
+- `src/checkpoint.rs`: saving and loading a model together with its
+  configuration.
+- `src/cli/`: the `rej-1b` command, with `train` and `generate`.
 
 ## Install
 
 ```bash
 cd wisent-1b
-pip install -e .
+cargo install --path .                    # CPU
+cargo install --path . --features metal   # Apple GPU
+cargo install --path . --features cuda    # NVIDIA GPU
 ```
 
-## Quick demo
+## Quick start
 
-Run the toy demo to see a tiny Rej model learn that `truthfulness=+2.0` and `truthfulness=-2.0` produce different continuations for the same prompt:
+Train the tiny model on any text file, then generate with and without a
+control:
 
 ```bash
-python scripts/demo_toy.py
+rej-1b train --config configs/rej_tiny.json --data corpus.txt \
+  --seq-length 64 --batch-size 8 --num-steps 500 --learning-rate 3e-4 \
+  --output-dir checkpoints
+rej-1b generate --checkpoint checkpoints/checkpoint_step_500 \
+  --prompt "the sky is" --max-new-tokens 20 --greedy
+rej-1b generate --checkpoint checkpoints/checkpoint_step_500 \
+  --prompt "the sky is" --max-new-tokens 20 --greedy --control truthfulness=-2.0
 ```
 
-Expected output (approximate):
+`train` prints one JSON line per step with that step's losses. It saves the
+final checkpoint to `checkpoint_step_<N>/`, which holds `config.json` and
+`model.safetensors`.
 
-```text
---- Greedy generation (no controls) ---
-'the sky is blue'
-
---- Greedy generation with truthfulness=+2.0 ---
-'the sky is blue'
-
---- Greedy generation with truthfulness=-2.0 ---
-'the sky is gray'
-```
+A model with fresh weights responds to no control. The gate that lets the
+concept stream reach the tokens starts at zero, as
+[Architecture](docs/architecture.md) explains, so a control has an effect
+only after training.
 
 
 ## Documentation
@@ -76,7 +87,10 @@ Expected output (approximate):
 
 ## Status
 
-This is a reference implementation of the architecture described in the manuscript at [wisent-ai/wisent-1b-paper](https://github.com/wisent-ai/wisent-1b-paper) (`neurips_2024.tex`). It contains no pretrained 1B weights — only the model definition, training code, and a working toy demo. Scaling to 1B+ parameters requires the data pipeline and compute described in the paper.
+This is a reference implementation of the architecture described in the manuscript at [wisent-ai/wisent-1b-paper](https://github.com/wisent-ai/wisent-1b-paper) (`neurips_2024.tex`). It contains no pretrained 1B weights, only the model definition, training and generation. Scaling to 1B+ parameters requires the data pipeline and compute described in the paper.
+
+Version 0.3.0 replaced the PyTorch package with this Rust crate. Checkpoints
+written by the PyTorch package (`.pt` files) cannot be loaded.
 
 ## Citation
 

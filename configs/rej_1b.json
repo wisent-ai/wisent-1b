@@ -4,12 +4,13 @@
   "d_model": 2048,
   "n_layers": 22,
   "n_heads": 16,
-  "d_head": null,
-  "intermediate_size": null,
+  "d_head": 128,
+  "intermediate_size": 5632,
   "dropout": 0.0,
   "n_concepts": 64,
   "d_concept": 256,
-  "n_named_concepts": 8,
+  "concept_heads": 8,
+  "concept_intermediate_size": 1024,
   "named_concepts": [
     "truthfulness",
     "uncertainty",
@@ -20,7 +21,7 @@
     "medical_risk",
     "helpfulness"
   ],
-  "concept_dropout": 0.0,
+  "carry_concept_state": false,
   "layer_norm_eps": 1e-05,
   "initializer_range": 0.02,
   "tie_word_embeddings": false

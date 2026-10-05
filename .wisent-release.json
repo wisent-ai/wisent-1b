@@ -2,5 +2,5 @@
   "schema_version": 1,
   "product": "wisent-1b",
   "releases": false,
-  "reason": "No PyPI project or release tag exists; the only consumable form is a development source checkout."
+  "reason": "No crates.io package or release tag exists; the only consumable form is a source checkout built with cargo install --path ."
 }
